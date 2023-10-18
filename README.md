@@ -6,6 +6,13 @@ More info will follow soon…
 ## Installation
 
 - Download `azuracast_xmltv`, put it in a location that’s in your path (on Linux servers, you can use `/usr/local/bin`, on desktop systems `~/.local/bin` or `~/bin` is usually also good).
+- On a remote server, you can use _wget_ or _curl_ to download it:
+  ```bash
+  wget azuracast_xmltv https://raw.githubusercontent.com/Moonbase59/azuracast_xmltv/master/azuracast_xmltv
+  ```
+  ```bash
+  curl -o azuracast_xmltv https://raw.githubusercontent.com/Moonbase59/azuracast_xmltv/master/azuracast_xmltv
+  ```
 - Make it executable (`chmod +x azuracast_xmltv`).
 - Optionally, open in a text editor and modify defaults near the beginning of the file.
 
