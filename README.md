@@ -206,6 +206,20 @@ Go to https://example.com/public/niteradio, click on ›Request Song‹ and sele
 
 Now _this_ looks like some program, right?
 
+## A note on mount point display names
+
+It makes no sense for an EPG to have a zillion entries called `/radio.mp3 (128kbps MP3)`. Seriously. A station might not even have a logo, so how would you distinguish all these in a large EPG?
+
+The above will happen when you leave the mount point _Display Name_ empty, it’s just AzuraCast’s default.
+
+My suggestion: Change the _Display Name_ of your station’s mount points to something meaningful that everyone can easily find and distinguish in the EPG. As an example, I used
+- Nite Radio (128kbps MP3)
+- Nite Radio (128kbps AAC)
+- Nite Radio Video-Stream
+- Nite Radio Testbild
+
+The HLS stream (if you have one), will automatically be named `<Your Station Name> (HLS)`.
+
 ## Validation and other nice tools
 
 Before going public, you should always check if your setup _validates_ as correct XMLTV data.
