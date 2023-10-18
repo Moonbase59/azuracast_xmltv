@@ -19,6 +19,17 @@ Note this _may_ work on Windows machines, but I don’t know. I’m a Linux guy.
 - Make it executable (`chmod +x azuracast_xmltv`).
 - Optionally, open in a text editor and modify defaults near the beginning of the file.
 
+Perform a trial run, just executing `azuracast_xmltv`. Depending on your operating system, chances are that not all required Python modules are installed, and `azuracast_xmltv` will complain about that.
+
+On Debian-like systems, you can easily install the missing modules using `pip3`. So let’s assume `azuracast_xmltv` complains: `ModuleNotFoundError: No module named 'lxml'`. Just go and install it:
+```bash
+pip3 install lxml
+```
+
+Then try again until all required modules are there. You have to do this only once.
+
+_Hint:_ If you don’t even have `pip3`, a `sudo apt install python3-pip` helps. ;-)
+
 For every new station, use the `-m`/`--m3u` option on the first run, to generate its M3U file. On further runs, this can be omitted and `azuracast_xmltv` will only generate fresh EPG XML files.
 
 On servers, just set up a _cron job_ for the software to update the EPG periodically.
