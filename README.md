@@ -30,7 +30,7 @@ Then try again until all required modules are there. You have to do this only on
 
 _Hint:_ If you don’t even have `pip3`, a `sudo apt install python3-pip` helps. ;-)
 
-For every new station, use the `-m`/`--m3u` option on the first run, to generate its M3U file. On further runs, this can be omitted and `azuracast_xmltv` will only generate fresh EPG XML files.
+For every new (or modified) station, use the `-m`/`--m3u` option on the first run, to generate its M3U file. On further runs, this can be omitted and `azuracast_xmltv` will only generate fresh EPG XML files.
 
 On servers, just set up a _cron job_ for the software to update the EPG periodically.
 Let’s assume you have saved the program as `/usr/local/bin/azuracast_xmltv`.
