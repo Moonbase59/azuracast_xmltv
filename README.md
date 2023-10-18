@@ -261,6 +261,18 @@ _EPG in KODI_
 
 When using _your own station_, I recommend setting up an API key in your AzuraCast and use the `-a`/`--apikey` option, which will enable enhanced functionality and provide a much richer EPG.
 
+If you use an API key, it will allow:
+- using otherwise invisible mounts, like an added video stream
+- customizable Live Show title/sub-title/description (streamer/DJ info)*
+- customizable Live Show DJ info (mis-using Streamer Comment field)
+- Live Show DJ image (if provided in AzuraCast); this is added as an
+  image of type "person" in the programme's `<presenter>` info.
+  Not all clients may support this (they'll just ignore it).
+- customizable listener requests info (for playlists that have requests enabled)
+- customizable syndication info (for playlists that are remote streams)
+
+\* This also works without an API key.
+
 ## Making `azuracast_xmltv` your own
 
 This is just a Python script, so you can open it using a text editor. (Windows users: No editors that produce a BOM, please! Use something like [Notepad++](https://notepad-plus-plus.org/).)
