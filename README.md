@@ -37,15 +37,17 @@ Let’s assume you have saved the program as `/usr/local/bin/azuracast_xmltv`.
 
 Use `crontab -e` to edit your crontab file, and add an entry like this:
 ```crontab
-# get new EPG data for Jellyfin every 12 hours
-0 */12 * * * /usr/local/bin/azuracast_xmltv -u https://demo.azuracast.com
+# get new EPG data for Jellyfin every 12 hours, 2 minutes past the hour
+# avoiding clashes with the AzuraCast demo instance just being reset.
+2 */12 * * * /usr/local/bin/azuracast_xmltv -u https://demo.azuracast.com
 ```
 Add any command line options you want, of course.
 
 If you don’t want the success/failure mails, simply send its output to `/dev/null`:
 ```crontab
-# get new EPG data for Jellyfin every 12 hours
-0 */12 * * * /usr/local/bin/azuracast_xmltv -u https://demo.azuracast.com > /dev/null
+# get new EPG data for Jellyfin every 12 hours, 2 minutes past the hour
+# avoiding clashes with the AzuraCast demo instance just being reset.
+2 */12 * * * /usr/local/bin/azuracast_xmltv -u https://demo.azuracast.com > /dev/null
 ```
 
 ## Usage
