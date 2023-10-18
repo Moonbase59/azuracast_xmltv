@@ -3,6 +3,8 @@ Create rich XMLTV Tuner and EPG files from an AzuraCast Web Radio.
 
 More info will follow soon…
 
+Note this _may_ work on Windows machines, but I don’t know. I’m a Linux guy.
+
 ## Installation
 
 - Download `azuracast_xmltv`, put it in a location that’s in your path (on Linux servers, you can use `/usr/local/bin`, on desktop systems `~/.local/bin` or `~/bin` is usually also good).
@@ -37,7 +39,7 @@ If you don’t want the success/failure mails, simply send its output to `/dev/n
 ## Usage
 
 From the help screen:
-```bash
+```
 usage: azuracast_xmltv [-h] [-v] [-u URL] [-i URL] [-d DAYS] [-o FOLDER]
                        [-a APIKEY] [-p] [-m]
 
@@ -124,6 +126,8 @@ There are some dumber media servers (like Plex, for an example) that don’t han
 
 Too sad, the AzuraCast demo instance has nothing on schedule right now… Let me show you part of an EPG file from my evaluation station (URLs modified):
 
+**Sample XMLTV EPG file `niteradio.example.com.xml`**
+
 ```xml
 <?xml version='1.0' encoding='UTF-8'?>
 <!DOCTYPE tv SYSTEM "xmltv.dtd">
@@ -188,6 +192,69 @@ Go to https://example.com/public/niteradio, click on ›Request Song‹ and sele
 
 Now _this_ looks like some program, right?
 
+## Validation and other nice tools
+
+Before going public, you should always check if your setup _validates_ as correct XMLTV data.
+
+On Debian-like systems, install the `xmltv-util` package:
+```bash
+sudo apt install xmltv-util
+```
+then _validate_ your EPG file using:
+```bash
+tv_validate_file niteradio.example.com.xml
+Validated ok.
+```
+
+Here is another nice trick: Output the EPG as text in your terminal!
+
+```bash
+tv_to_text niteradio.example.com.xml
+10-18 (Wednesday)
+
+06:00--12:00	Pop (requests enabled) // Your favorite station, YOUR music!	Nite Radio
+12:00--16:00	Live: Moonbase	Nite Radio
+
+10-21 (Saturday)
+
+18:00--00:00	Heart Dance from London, UK	Nite Radio
+
+10-22 (Sunday)
+
+00:00--06:00	Nuit électronique (requests enabled) // Your favorite station, YOUR music!	Nite Radio
+
+Generated from example.com by azuracast_xmltv 0.5.0.
+```
+
+Or even with long descriptions:
+
+```bash
+tv_to_text --with-desc radio.niteradio.net.xml 
+10-18 (Wednesday)
+
+06:00--12:00	Pop (requests enabled) // Your favorite station, YOUR music!	Nite Radio	Playlist: Pop  The request lines are open! Make this program YOURS by adding a request.  Go to https://example.com/public/niteradio, click on ›Request Song‹ and select your favorite.
+12:00--16:00	Live: Moonbase	Nite Radio	Streamer: Moonbase  Live Show, hosted by Moonbase.  In his unmistakable way, Moonbase presents highlights of music history: Kraut and progressive rock, classic, glam and hard rock. Some metal, too. Some of his shows are centered around the finest electronic music in existence, most notably the Berlin School.  You CAN be excited. Or just have fun!
+
+10-21 (Saturday)
+
+18:00--00:00	Heart Dance from London, UK	Nite Radio	Playlist: Heart Dance from London, UK  (Syndicated content.)
+
+10-22 (Sunday)
+
+00:00--06:00	Nuit électronique (requests enabled) // Your favorite station, YOUR music!	Nite Radio	Playlist: Nuit électronique  The request lines are open! Make this program YOURS by adding a request.  Go to https://example.com/public/niteradio, click on ›Request Song‹ and select your favorite.
+
+Generated from example.com by azuracast_xmltv 0.5.0.
+```
+
+When validated, you can import your M3U "tuner" and the XML EPG into your media center and **enjoy a beautiful LiveTV EPG**:
+
+![Live-TV – Mozilla Firefox_004](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/81ad9ccb-6d37-45e5-bc00-cb9ba5eff678)  
+_EPG in Jellyfin_
+
+![screenshot00001](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/765941a4-a4be-4bfd-8e22-f8fbf8f2559d)  
+_EPG in KODI_
+
+
 ## API Key
 
 `azuracast_xmltv` _will_ work with any AzuraCast instance that uses scheduled programming, even stations that might not be your own. Please don’t overuse this—polling for a fresh EPG every 12, 24, or 48 hours is usually enough!
@@ -198,6 +265,9 @@ When using _your own station_, I recommend setting up an API key in your AzuraCa
 
 This is just a Python script, so you can open it using a text editor. (Windows users: No editors that produce a BOM, please! Use something like [Notepad++](https://notepad-plus-plus.org/).)
 
-Near the beginning of the file, you’ll find many user-customizable options, most notably the program title/sub-title and description text to go with a) _live shows_ (streamer/DJ), b) _syndicated content_ (remote playlists), and c) playlists that have _listener requests_ enabled.
+Near the beginning of the file, you’ll find many user-customizable options, most notably the program title/sub-title and description text to go with…
+- _live shows_ (streamer/DJ),
+- _syndicated content_ (remote playlists), and
+- playlists that have _listener requests_ enabled.
 
 You can also set defaults for most options here. These will be shown when `--help` is invoked.
