@@ -1,0 +1,594 @@
+#!/usr/bin/env python3
+# encoding: utf-8
+
+# azuracast_xmltv
+# grabs EPG info from an AzuraCast (web radio) instance
+# and provides an XMLTV.xml type listing
+#
+# Note: Requires Python 3.7 or newer (for correct strftime/strptime handling).
+#
+# One AzuraCast instance can have multiple stations (= "channels").
+# Each station can have multiple mounts, which we ignore for EPG purposes,
+# since they are supposed to play the same content.
+# The XMLTV EPG will contain schedule items for ALL stations,
+# since some programs can't handle too many separate EPG files.
+#
+# Mounts are important for the M3U playlist files, though.
+# We will create one M3U playlist file per station (good for resellers,
+# or if you want to publicize only certain stations).
+
+# 2023-10-15 - Moonbase59 - initial public version
+# 2023-10-16 - Moonbase59 - v0.3.1
+#   - rework API access, use a class
+# 2023-10-17 - Moonbase59 - v0.4.0
+#   - PEP8 formatting
+#   - EPG for more than 2 days by repeating the API call
+# 2023-10-18 - Moonbase59 - v0.4.1
+#   - better HTTP request error handling
+# 2023-10-18 - Moonbase59 - v0.5.0
+#   - lots of real-life tests, better error handling
+#   - tests using the "xmltv-util" package: tv_validate_file, tv_to_text, etc.
+#   - work around AzuraCast API quirks (multi-day schedule, duplicates removal)
+#   - provide much nicer EPG programme entries if using an API key (=you own station)
+#       - customizable Live Show title/sub-title/description (streamer/DJ info)
+#       - customizable Live Show DJ info (mis-using Streamer Comment field)
+#       - Live Show DJ image (if provided in AzuraCast); this is added as an
+#         image of type "person" in the programme's <presenter> info.
+#         Not all clients may support this (they'll just ignore it).
+#       - customizable listener requests info (for playlists that have requests enabled)
+#       - customizable syndication info (for playlists that are remote streams)
+
+# version info
+__version_info__ = ('0', '5', '0')
+__version__ = '.'.join(__version_info__)
+
+APPNAME = "azuracast_xmltv " + __version__
+LICENSE = "MIT"
+APPURL = "https://github.com/Moonbase59/azuracast_xmltv"
+
+
+# *** USER CONFIGURABLE DEFAULTS START HERE ***
+
+# Use the base URL here, NOT the public player URL!
+# Note: The AzuraCast demo server is reset on the top of every hour,
+# so you might get a CloudFlare Error 521. Just try again a few minutes later.
+instance_url = 'https://demo.azuracast.com'
+
+# EPG programme category to list (i.e. "Music", "Talk", ...)
+category = 'Music'
+
+# Text to add to a programme listing if listener requests are enabled
+# for this playlist. Only works when an API key is given, i.e., on your own station.
+# Placeholders:
+# - {playlist} will be replaced with the playlist name
+# - {request_url} will be replaced by the station's public player URL
+
+# this will be used as a programme's title
+requests_enabled_title = "{playlist} (requests enabled)"
+# this will be used as a programme's subtitle
+requests_enabled_subtitle = "Your favorite station, YOUR music!"
+# this will be appended to a programme's description, maybe use starting newline(s)
+requests_enabled_description = """
+
+The request lines are open! Make this program YOURS by adding a request.
+
+Go to {request_url}, click on ›Request Song‹ and select your favorite.
+"""
+
+# Text to add to a programme listing if it is a syndicated playlist.
+# (source: remote_url). Only works when an API key is given, i.e., on your own station.
+# Placeholders:
+# - {playlist} will be replaced with the playlist name
+# - {remote_url} will be replaced by the remote URL used in the playlist
+
+# this will be used as a programme's title
+remote_title = "{playlist}"
+# this will be used as a programme's subtitle
+remote_subtitle = ""
+# this will be appended to a programme's description, maybe use starting newline(s)
+remote_description = """
+
+(Syndicated content.)
+"""
+
+# "Live" text to be shown when a streamer/DJ transmits a scheduled show
+# - {presenter} will be replaced with the streamer/DJ name (also works without API key)
+# - {image_url} will be replaced with the streamer's image URL (needs API key)
+# - {comments} will be replaced with AzuraCast's Streamer Comments field content.
+#   Comments only work with an API key, and should be used with care:
+#   This field was originally meant for internal remarks only, you could leak data!
+# this will be used as a programme's title
+live_title = "Live: {presenter}"
+# this will be used as a programme's subtitle
+live_subtitle = ""
+# this will be appended to a programme's description, maybe use starting newline(s)
+# REMOVE {comments} if you use that field for internal remarks, else you LEAK INTERNALS!
+live_description = """
+
+Live Show, hosted by {presenter}.
+
+{comments}
+"""
+
+# -a/--apikey option default:
+# Add an AzuraCast API key here for extended functionality
+# An API key is needed to include streams hidden from public pages,
+# like an extra video stream.
+api_key = ''
+
+# -p/--public option default:
+# If 'public_only' is True, we will only list stations and mounts marked as public.
+public_only = False
+
+# -m/--m3u option default:
+# No need to recreate the XMLTV M3U Tuner file if only updating the EPG.
+# You WILL need to use the -u/--m3u option to initially create the tuner file,
+# or when you have made changes to the streams in AzuraCast.
+make_m3u = False
+
+# -i/--icon option default:
+# You can provide a channel icon, for example from the station's web page.
+# If omitted, we will use the station's Default Album Art (set in "Branding").
+channel_icon_url = ''
+
+# -o/--output option default:
+# If you don't want files to be written into the current folder,
+# specify an output folder here.
+output_folder = '.'
+
+# -d/--days option default:
+# EPG for how many days?
+num_days = 7
+
+# *** END OF USER CONFIGURABLE DEFAULTS -- DO NOT MODIFY ANYTHING BELOW ***
+
+
+import sys
+def eprint(*args, **kwargs):
+    """print error messages to stderr"""
+    print(*args, file=sys.stderr, **kwargs)
+
+try:
+    import os
+    import requests
+    import json
+    import lxml.etree as et
+    import tzlocal
+    import datetime as dt
+    from urllib.parse import urlparse
+    import argparse
+except Exception as error:
+    print("Error:", type(error).__name__, "–", error)
+    exit(1)
+
+
+class azuracast_api():
+    """AzuraCast API interface"""
+
+    def __init__(self, instance_url, api_key='', timeout=30):
+        self.instance_url = instance_url
+        self.api_key = api_key
+        self.timeout = timeout # default None = until connection closed
+        self.status_code = 0
+        if api_key:
+            self.headers = {
+                "accept": "application/json",
+                "X-API-Key": api_key
+            }
+        else:
+            self.headers = {
+                "accept": "application/json"
+            }
+
+    def get(self, endpoint, params={}, quit_on_error=False):
+        try:
+            response = requests.get(
+                self.instance_url + '/api' + endpoint,
+                headers=self.headers,
+                params=params,
+                timeout=self.timeout)
+            self.status_code = response.status_code
+            response.raise_for_status()
+        except Exception as error:
+            eprint("Error:", type(error).__name__, "–", error)
+            if quit_on_error:
+                exit(1)
+            else:
+                return {}
+
+        return (response.json())
+
+    def fail(self):
+        return self.status_code != 200
+
+
+def get_stations(api, channel_icon_url='', public_only=True):
+    """Get station info from this instance"""
+    stations = []
+
+    r = api.get('/stations')
+    # print(json.dumps(r, indent=2))
+
+    for station in r:
+        # get station's default album art; we use this as station logo
+        # we use a little trick here by requesting the artwork for non-existing medium "0",
+        # which will cause AzuraCast to look up station branding and
+        # instance branding for a replacement. It returns the actual image, not a URL.
+        if channel_icon_url:
+            channel_icon = channel_icon_url
+        else:
+            channel_icon = api.instance_url + \
+                '/api/station/' + str(station["id"]) + '/art/0'
+        s = {
+            "id": station["id"],
+            "channel_id": station["shortcode"] + '.' + urlparse(instance_url).netloc,
+            "icon": channel_icon,  # not yet from API
+            "name": station["name"],
+            "shortcode": station["shortcode"],
+            "description": station["description"],
+            "is_public": station["is_public"],
+            "url": station["url"],
+            "public_player_url": station["public_player_url"],
+            "mounts": [],
+            "playlists": [],
+            "streamers": []
+        }
+
+        # if an API key is given, we can provide a much richer output, notably:
+        #   - include mounts not visible on public pages (like a video stream)
+        #   - show if listener requests are allowed in programmes (from playlists)
+        #   - show presenter info (like a streamer image) in programmes (from streamers)
+        if api.api_key:
+
+            # get mount info, to include otherwise invisible mounts
+            rm = api.get(
+                '/station/' + str(station["id"]) + '/mounts', quit_on_error=True)
+            # print(json.dumps(rm, indent=2))
+
+            for mount in rm:
+                m = {
+                    "id": mount["id"],
+                    "name": mount["display_name"],
+                    "is_public": mount["is_public"],
+                    "url": mount["links"]["listen"]
+                }
+                if public_only:
+                    if mount["is_public"]:
+                        s["mounts"].append(m)
+                else:
+                    s["mounts"].append(m)
+
+            # get playlist info, to later show if listener requests are allowed
+            # in the programme items
+            rp = api.get(
+                '/station/' + str(station["id"]) + '/playlists')
+
+            for playlist in rp:
+                p = {
+                    "id": playlist["id"],
+                    "name": playlist["name"],
+                    "source": playlist["source"],
+                    "remote_url": playlist["remote_url"],
+                    "is_jingle": playlist["is_jingle"],
+                    "include_in_on_demand": playlist["include_in_on_demand"],
+                    "include_in_requests": playlist["include_in_requests"]
+                }
+                if playlist["is_enabled"]:
+                    s["playlists"].append(p)
+
+            # get streamer info, to include image in programme's presenter info
+            rs = api.get(
+                '/station/' + str(station["id"]) + '/streamers')
+
+            for streamer in rs:
+                dj = {
+                    "id": streamer["id"],
+                    "streamer_username": streamer["streamer_username"],
+                    "name": streamer["display_name"],
+                    "art": streamer["art"],
+                    # Be careful: UI says "INTERNAL commments ony",
+                    # but _could_ be used for a description
+                    "comments": streamer["comments"]
+                }
+                s["streamers"].append(dj)
+
+        else:
+
+            # no API key, just use the visible standard mounts
+            for mount in station["mounts"]:
+                m = {
+                    "id": mount["id"],
+                    "name": mount["name"],
+                    "url": mount["url"]
+                }
+                s["mounts"].append(m)
+
+        if station["hls_enabled"] == True:
+            m = {
+                "name": station["name"] + " (HLS)",
+                "url": station["hls_url"]
+            }
+            s["mounts"].append(m)
+
+        if public_only:
+            if station["is_public"]:
+                stations.append(s)
+        else:
+            stations.append(s)
+
+    return stations
+
+
+def create_m3u(station, output_folder=''):
+    """Create an M3U playlist for a single station"""
+
+    # create outfile from folder + station shortname + '.m3u'
+    outfile = output_folder+station["shortcode"]+".m3u"
+    print(f"Writing XMLTV Tuner file (M3U playlist): {outfile}")
+
+    with open(outfile, 'w') as f:
+        f.write('#EXTM3U\n')
+        for mount in station["mounts"]:
+            f.write(
+                f'#EXTINF:-1 tvg-name="{mount["name"]}" tvg-id="{station["channel_id"]}" group-title="{station["name"]}" tvg-logo="{station["icon"]}",{mount["name"]}\n')
+            f.write(mount['url']+'\n')
+
+
+def get_programme(api, station, num_days=num_days):
+    """Get a channel's programme"""
+
+    programmes = []
+
+    # this is currently sub-optimal: The AzuraCast API only returns data
+    # for the requested start day and the next.
+    # It would be better if we could specify the number of days instead of rows.
+    # We fake this by making several requests, one for every 2 days.
+    # We also don't care about duplicates -- the parsing is just too much,
+    # let the client sort it out.
+
+    local_timezone = tzlocal.get_localzone()
+    rows = 100  # number of rows the API shall return, per 2 day result
+
+    # start today at midnight
+    today = dt.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    for day in range(0, num_days, 2):
+        start = today + dt.timedelta(days=day)
+        # generate utc offset with colon ourselves, using "%:z" doesn't work everywhere
+        utc_offset = start.astimezone(local_timezone).strftime("%z")
+        utc_offset = utc_offset[0:3] + ':' + utc_offset[3:]
+        start = start.astimezone(local_timezone).strftime(
+            "%Y-%m-%dT%H:%M:%S") + utc_offset
+
+        params = {
+            "now": start,
+            "rows": rows
+        }
+        r = api.get(
+            '/station/' + str(station["id"]) + '/schedule', params=params)
+        if api.fail():
+            return programmes
+        # print(json.dumps(r, indent=2))
+
+        for r_pgm in r:
+            p = {
+                "id": r_pgm["id"],
+                "type": r_pgm["type"],
+                "channel": station["channel_id"],
+                "start": dt.datetime.strptime(r_pgm["start"], "%Y-%m-%dT%H:%M:%S%z").astimezone(local_timezone).strftime("%Y%m%d%H%M%S %z"),
+                "stop": dt.datetime.strptime(r_pgm["end"], "%Y-%m-%dT%H:%M:%S%z").astimezone(local_timezone).strftime("%Y%m%d%H%M%S %z"),
+                "title": r_pgm["title"],
+                "sub-title": "",
+                "desc": r_pgm["description"],
+                "category": category,
+                "credits": []
+            }
+
+            # try to enrich programme with playlist info
+            if r_pgm["type"] == "playlist":
+                # try to find the corresponding playlist by name (sadly, no ID)
+                pl = next((item for item in station["playlists"] if item["name"] == r_pgm["name"]), None)
+
+                # playlist has listener requests enabled, enrich title, sub-title, and description
+                if pl and pl["include_in_requests"]:
+                    p["title"] = requests_enabled_title.replace("{playlist}", pl["name"])
+                    p["sub-title"] = requests_enabled_subtitle.replace("{playlist}", pl["name"]).replace("{request_url}", station["public_player_url"])
+                    p["desc"] = r_pgm["description"] + requests_enabled_description.replace("{playlist}", pl["name"]).replace("{request_url}", station["public_player_url"])
+
+                # playlist is syndicated content (remote)
+                if pl and pl["source"] == "remote_url":
+                    p["title"] = remote_title.replace("{playlist}", pl["name"])
+                    p["sub-title"] = remote_subtitle.replace("{playlist}", pl["name"]).replace("{remote_url}", pl["remote_url"])
+                    p["desc"] = r_pgm["description"] + remote_description.replace("{playlist}", pl["name"]).replace("{remote_url}", pl["remote_url"])
+
+            # try to enrich programme with streamer info
+            if r_pgm["type"] == "streamer":
+                # try to find the corresponding streamer by name (sadly, no ID)
+                dj = next((item for item in station["streamers"] if item["name"] == r_pgm["name"]), None)
+
+                if dj:
+                    # found the streamer, use their info (and image)
+                    p["title"] = live_title.replace("{presenter}", dj["name"])
+                    p["sub-title"] = live_subtitle.replace("{presenter}", dj["name"]).replace("{comments}", dj["comments"])
+                    p["desc"] = r_pgm["description"] + live_description.replace("{presenter}", dj["name"]).replace("{comments}", dj["comments"]).replace("{image_url}", dj["art"])
+                    p["credits"].append({"presenter": {"name": dj["name"], "image": dj["art"]}})
+                else:
+                    # streamer not provided, make for some general niceness
+                    p["title"] = live_title.replace("{presenter}", r_pgm["name"])
+                    p["sub-title"] = live_subtitle.replace("{presenter}", r_pgm["name"]).replace("{comments}", '')
+                    p["desc"] = r_pgm["description"] + live_description.replace("{presenter}", r_pgm["name"]).replace("{comments}", '').replace("{image_url}", '')
+                    p["credits"].append({"presenter": {"name": r_pgm["name"]}})
+
+            programmes.append(p)
+
+    #print(json.dumps(programmes, indent=2))
+
+    # and here starts the tedious work of removing the duplicates...
+    # de-duplicate using a set (returns an unsorted list!)
+    set_of_jsons = {json.dumps(d, sort_keys=True) for d in programmes}
+    programmes = [json.loads(t) for t in set_of_jsons]
+    # sort by start time
+    programmes = sorted(programmes, key=lambda k: k['start'])
+
+    #print('*'*79)
+    #print(json.dumps(programmes, indent=2))
+
+    return programmes
+
+
+def create_xmltv(stations, programmes, output_folder=''):
+    """Create an XMLTV EPG for all stations"""
+
+    # create outfile from folder + domain.name + '.xml'
+    outfile = output_folder+urlparse(instance_url).netloc+'.xml'
+    print(f"Writing XMLTV EPG file: {outfile}")
+
+    # set up the root
+    local_timezone = tzlocal.get_localzone()
+    date = dt.datetime.now().astimezone(local_timezone).strftime("%Y%m%d%H%M%S %z")
+
+    root = et.Element("tv",
+                      attrib={"date": date,
+                              "source-info-url": instance_url,
+                              "source-info-name": urlparse(instance_url).netloc,
+                              "generator-info-name": APPNAME,
+                              "generator-info-url": APPURL
+                              })
+
+    # set up the channels
+    for station in stations:
+        channel = et.SubElement(root, "channel", attrib={
+                                "id": station["channel_id"]})
+        et.SubElement(channel, "display-name").text = station["name"]
+        if station["icon"]:
+            et.SubElement(channel, "icon", attrib={"src": station["icon"]})
+
+    # set up programs
+    for s_pgm in programmes:
+        for r_pgm in s_pgm:
+            attrib_lang = {"lang": "en"}
+            programme_attrib = dict(
+                start=r_pgm["start"],
+                stop=r_pgm["stop"],
+                channel=r_pgm["channel"])
+            programme = et.SubElement(
+                root, "programme", attrib=programme_attrib)
+            et.SubElement(programme, "title",
+                          attrib=attrib_lang).text = r_pgm["title"]
+            # leave out empty subtitles since some programs throw warnings
+            if r_pgm["sub-title"]:
+                et.SubElement(programme, "sub-title",
+                              attrib=attrib_lang).text = r_pgm["sub-title"]
+            et.SubElement(programme, "desc",
+                          attrib=attrib_lang).text = r_pgm["desc"]
+
+            credits = et.SubElement(programme, "credits")
+            for c in r_pgm["credits"]:
+                for k, v in c.items():
+                    credit = et.SubElement(credits, k)
+                    credit.text = v["name"]
+                    for k1, v1 in v.items():
+                        if k1 == "image":
+                            et.SubElement(credit, k1, attrib={"type": "person"}).text = v1
+
+            et.SubElement(programme, "category",
+                          attrib=attrib_lang).text = r_pgm["category"]
+
+    with et.xmlfile(outfile, encoding="UTF-8") as xf:
+        xf.write_declaration()
+        xf.write_doctype('<!DOCTYPE tv SYSTEM "xmltv.dtd">')
+        xf.write(root, pretty_print=True)
+
+
+# some tests for arparse
+
+def my_url(arg):
+    """Check if valid URL given"""
+    url = urlparse(arg)
+    if all((url.scheme, url.netloc)):
+        return arg
+    raise argparse.ArgumentTypeError('Invalid URL')
+
+
+def my_icon_url(arg):
+    """Check if valid icon URL given"""
+    url = urlparse(arg)
+    if arg == '' or all((url.scheme, url.netloc, url.path)):
+        return arg
+    raise argparse.ArgumentTypeError('Invalid icon URL')
+
+
+def my_path(arg):
+    """Check for valid output file path"""
+    arg = os.path.normpath(arg)
+    if os.path.isdir(arg):
+        return arg
+    else:
+        raise NotADirectoryError(arg)
+
+
+parser = argparse.ArgumentParser(description='Create XMLTV Tuner and EPG files from an AzuraCast Web Radio.',
+                                 epilog=f"""
+%(prog)s can create XMLTV M3U Tuner files and XML EPG files for both
+your own and other AzuraCast stations.
+
+For much better programme data to be generated, create an AzuraCast API key
+and use the -a/--apikey option, which allows:
+  - using otherwise invisible mounts, like an added video stream,
+  - showing listener request info if a playlist has requests enabled
+  - adding a presenter image on live shows, and (mis-)using the
+    streamer comment field as a description
+  - showing extra info for syndicated content (remote playlists)
+
+Edit '{argparse._sys.argv[0]}' using a text editor to change
+some defaults near the top of the file.
+
+Please report any issues to {APPURL}/issues.""",
+                                 formatter_class=argparse.RawDescriptionHelpFormatter) # ArgumentDefaultsHelpFormatter
+parser.add_argument('-v', '--version', action='version',
+                    version='%(prog)s ' + __version__)
+parser.add_argument('-u', '--url', type=my_url, default=instance_url,
+                    help='base URL to an AzuraCast instance')
+parser.add_argument('-i', '--icon', metavar='URL', type=my_icon_url, default=channel_icon_url,
+                    help='URL to a channel icon; will use station\'s default album art if omitted')
+parser.add_argument('-d', '--days', type=int, default=num_days,
+                    help='number of days to include in the EPG')
+parser.add_argument('-o', '--output', metavar='FOLDER', type=my_path,
+                    default=output_folder, help='output folder for XMLTV files')
+parser.add_argument('-a', '--apikey', default=api_key,
+                    help='AzuraCast API key; allows creating much better EPG data, see below')
+parser.add_argument('-p', '--public', action='store_true',
+                    default=public_only, help='include only public stations & streams')
+parser.add_argument('-m', '--m3u', action='store_true', default=make_m3u,
+                    help='create M3U XMLTV Tuner file(s); only needed on first run or after changes in AzuraCast')
+
+args = parser.parse_args()
+
+instance_url = args.url
+api_key = args.apikey
+public_only = args.public
+output_folder = args.output + '/'
+make_m3u = args.m3u
+channel_icon_url = args.icon
+num_days = args.days
+
+# Init the AzuraCast API
+api = azuracast_api(instance_url, api_key)
+
+# Get stations from this AzuraCast instance
+stations = get_stations(api, channel_icon_url=channel_icon_url, public_only=public_only)
+#print(json.dumps(stations, indent=2))
+
+# Create M3U playlist files
+if make_m3u:
+    for station in stations:
+        create_m3u(station, output_folder=output_folder)
+
+# Get schedules from all stations
+programmes = []
+for station in stations:
+    programmes.append(get_programme(api, station, num_days))
+#print(json.dumps(programmes, indent=2))
+
+# Create XMLTV file
+create_xmltv(stations, programmes, output_folder=output_folder)
