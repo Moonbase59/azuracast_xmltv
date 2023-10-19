@@ -311,3 +311,31 @@ Near the beginning of the file, you’ll find many user-customizable options, mo
 - playlists that have _listener requests_ enabled.
 
 You can also set defaults for most options here. These will be shown when `--help` is invoked.
+
+## But wait… What do I _do_ with these files now?
+
+I can’t give support for the many applications that use this format, but here’s a short list of apps I have tested or know they work fine with `azuracast_xmltv`:
+
+- [Jellyfin](https://jellyfin.org/)\* - The Free Software Media System
+- [KODI](https://kodi.tv/)\* - Entertainment Center
+- [Plex](https://www.plex.tv) - (non-free)
+- [Emby](https://emby.media/) - (non-free)
+- [TVHeadend](https://tvheadend.org/)\* - TV Streaming Server and Recorder
+- xTeVe\* ([GitHub](https://github.com/xteve-project/xTeVe)) ([Documentation](https://github.com/xteve-project/xTeVe-Documentation/blob/master/en/configuration.md)) - M3U Proxy, recommended
+
+Many others are out there in the wild. Consult their documentation to find how to set up "XMLTV" or "IPTV". In KODI, some are under "PVR …" (Personal Video Recorder).
+
+### Further reading
+
+Here are some links for looking up related items:
+
+- The [XMLTV DTD](https://github.com/XMLTV/xmltv/blob/master/xmltv.dtd)\*
+- [XMLTV.org](https://xmltv.org)
+- [Kodi: IPTV einrichten](https://www.heise.de/tipps-tricks/Kodi-IPTV-einrichten-4676549.html) - (heise online; German)
+- [What is Live TV, PVR and Radio?](https://kodi.wiki/view/PVR) - (KODI FAQ)
+- [PVR IPTV Simple Client](https://kodi.wiki/view/Add-on:PVR_IPTV_Simple_Client) - IPTV client for KODI
+- [Kodinerds](https://www.kodinerds.net/) - KODI-related German Forum
+- [Kodinerds IPTV - Freie und legale Streams für Kodi](https://github.com/jnk22/kodinerds-iptv) - Free and legal streams for IPTV; German, but has international channels.
+- [ErsatzTV](https://ersatztv.org/)\* - Your Personal IPTV Server
+
+\* Free and Open Source Software I personally use and recommend.
