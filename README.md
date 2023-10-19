@@ -319,6 +319,7 @@ I can’t give support for the many applications that use this format, but here�
 - [Plex](https://www.plex.tv) - (non-free)
 - [Emby](https://emby.media/) - (non-free)
 - [TVHeadend](https://tvheadend.org/)\* - TV Streaming Server and Recorder
+- [VLC](https://www.videolan.org/vlc/)\* - The VLC media player
 - xTeVe\* ([GitHub](https://github.com/xteve-project/xTeVe)) ([Documentation](https://github.com/xteve-project/xTeVe-Documentation/blob/master/en/configuration.md)) - M3U Proxy, recommended
 
 Many others are out there in the wild. Consult their documentation to find how to set up "XMLTV" or "IPTV". In KODI, some are under "PVR …" (Personal Video Recorder).
