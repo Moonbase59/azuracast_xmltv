@@ -2,8 +2,6 @@
 
 **Create rich XMLTV Tuner and EPG files from an AzuraCast Web Radio.**
 
-More info will follow…
-
 Note this _may_ work on Windows machines, but I don’t know. I’m a Linux guy.
 
 ## Installation
