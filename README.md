@@ -4,6 +4,8 @@
 
 Note this _may_ work on Windows machines, but I don’t know. I’m a Linux guy.
 
+**Want to see some screenshots** before you bother to read all this? → [Here we go!](https://github.com/Moonbase59/azuracast_xmltv/blob/master/README.md#some-screenshots-this-is-how-it-looks-like)
+
 ## Installation
 
 - Download `azuracast_xmltv`, put it in a location that’s in your path (on Linux servers, you can use `/usr/local/bin`, on desktop systems `~/.local/bin` or `~/bin` is usually also good).
