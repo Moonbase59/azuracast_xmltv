@@ -212,7 +212,9 @@ It makes no sense for an EPG to have a zillion entries called `/radio.mp3 (128kb
 
 The above will happen when you leave the mount point _Display Name_ empty, it’s just AzuraCast’s default.
 
-My suggestion: Change the _Display Name_ of your station’s mount points to something meaningful that everyone can easily find and distinguish in the EPG. As an example, I used
+My suggestion: Change the _Display Name_ of your station’s mount points to something meaningful that everyone can easily find and distinguish in the EPG. `azuracast_xmltv` will _automatically pick up the change_ when you run it with the `-m`/`--m3u` option next time.
+
+As an example, I used
 - Nite Radio (128kbps MP3)
 - Nite Radio (128kbps AAC)
 - Nite Radio Video-Stream
