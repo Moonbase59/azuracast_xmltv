@@ -37,11 +37,18 @@
 #         Not all clients may support this (they'll just ignore it).
 #       - customizable listener requests info (for playlists that have requests enabled)
 #       - customizable syndication info (for playlists that are remote streams)
-# 2023-10-19 - Moonbase59 . v0.5.1
-#   -   Add 'User-Agent' header for API request, so azuracast_xmltv can be better identified
+# 2023-10-19 - Moonbase59 - v0.5.1
+#   - Add 'User-Agent' header for API request, so azuracast_xmltv can be better identified
+# 2023-10-19 - Moonbase59 - v0.5.2
+#   - Sanitize station name to get RFC2383-compliant (it's user input, after all).
+#   - Use 'hostname' instead of 'netloc' to create channel ID; fixes #1.
+#     We still leave 'netloc' in the EPG as 'source-info-name' so we know where it
+#     really came from.
+#   - PEP8 formatting.
 
 # version info
-__version_info__ = ('0', '5', '1')
+import sys
+__version_info__ = ('0', '5', '2')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -146,10 +153,10 @@ num_days = 7
 # *** END OF USER CONFIGURABLE DEFAULTS -- DO NOT MODIFY ANYTHING BELOW ***
 
 
-import sys
 def eprint(*args, **kwargs):
     """print error messages to stderr"""
     print(*args, file=sys.stderr, **kwargs)
+
 
 try:
     import os
@@ -171,7 +178,7 @@ class azuracast_api():
     def __init__(self, instance_url, api_key='', timeout=30):
         self.instance_url = instance_url
         self.api_key = api_key
-        self.timeout = timeout # default None = until connection closed
+        self.timeout = timeout  # default None = until connection closed
         self.status_code = 0
         if api_key:
             self.headers = {
@@ -209,6 +216,15 @@ class azuracast_api():
         return self.status_code != 200
 
 
+def sanitize(name):
+    """Sanitize a station shortname to become RFC2838-compliant"""
+    # strip, replace ' ' & '_' with '-' (no '_' allowed in domains)
+    name = name.strip().translate(str.maketrans(' _', '--'))
+    keep = '-.'
+    # remove everything that isn't alphanumeric (Unicode-aware) or to be kept
+    return ''.join(c for c in name if c.isalnum() or c in keep)
+
+
 def get_stations(api, channel_icon_url='', public_only=True):
     """Get station info from this instance"""
     stations = []
@@ -228,7 +244,7 @@ def get_stations(api, channel_icon_url='', public_only=True):
                 '/api/station/' + str(station["id"]) + '/art/0'
         s = {
             "id": station["id"],
-            "channel_id": station["shortcode"] + '.' + urlparse(instance_url).netloc,
+            "channel_id": sanitize(station["shortcode"]) + '.' + urlparse(instance_url).hostname,
             "icon": channel_icon,  # not yet from API
             "name": station["name"],
             "shortcode": station["shortcode"],
@@ -330,7 +346,7 @@ def create_m3u(station, output_folder=''):
     """Create an M3U playlist for a single station"""
 
     # create outfile from folder + station shortname + '.m3u'
-    outfile = output_folder+station["shortcode"]+".m3u"
+    outfile = output_folder+sanitize(station["shortcode"])+".m3u"
     print(f"Writing XMLTV Tuner file (M3U playlist): {outfile}")
 
     with open(outfile, 'w') as f:
@@ -394,41 +410,54 @@ def get_programme(api, station, num_days=num_days):
             # try to enrich programme with playlist info
             if r_pgm["type"] == "playlist":
                 # try to find the corresponding playlist by name (sadly, no ID)
-                pl = next((item for item in station["playlists"] if item["name"] == r_pgm["name"]), None)
+                pl = next(
+                    (item for item in station["playlists"] if item["name"] == r_pgm["name"]), None)
 
                 # playlist has listener requests enabled, enrich title, sub-title, and description
                 if pl and pl["include_in_requests"]:
-                    p["title"] = requests_enabled_title.replace("{playlist}", pl["name"])
-                    p["sub-title"] = requests_enabled_subtitle.replace("{playlist}", pl["name"]).replace("{request_url}", station["public_player_url"])
-                    p["desc"] = r_pgm["description"] + requests_enabled_description.replace("{playlist}", pl["name"]).replace("{request_url}", station["public_player_url"])
+                    p["title"] = requests_enabled_title.replace(
+                        "{playlist}", pl["name"])
+                    p["sub-title"] = requests_enabled_subtitle.replace(
+                        "{playlist}", pl["name"]).replace("{request_url}", station["public_player_url"])
+                    p["desc"] = r_pgm["description"] + requests_enabled_description.replace(
+                        "{playlist}", pl["name"]).replace("{request_url}", station["public_player_url"])
 
                 # playlist is syndicated content (remote)
                 if pl and pl["source"] == "remote_url":
                     p["title"] = remote_title.replace("{playlist}", pl["name"])
-                    p["sub-title"] = remote_subtitle.replace("{playlist}", pl["name"]).replace("{remote_url}", pl["remote_url"])
-                    p["desc"] = r_pgm["description"] + remote_description.replace("{playlist}", pl["name"]).replace("{remote_url}", pl["remote_url"])
+                    p["sub-title"] = remote_subtitle.replace(
+                        "{playlist}", pl["name"]).replace("{remote_url}", pl["remote_url"])
+                    p["desc"] = r_pgm["description"] + remote_description.replace(
+                        "{playlist}", pl["name"]).replace("{remote_url}", pl["remote_url"])
 
             # try to enrich programme with streamer info
             if r_pgm["type"] == "streamer":
                 # try to find the corresponding streamer by name (sadly, no ID)
-                dj = next((item for item in station["streamers"] if item["name"] == r_pgm["name"]), None)
+                dj = next(
+                    (item for item in station["streamers"] if item["name"] == r_pgm["name"]), None)
 
                 if dj:
                     # found the streamer, use their info (and image)
                     p["title"] = live_title.replace("{presenter}", dj["name"])
-                    p["sub-title"] = live_subtitle.replace("{presenter}", dj["name"]).replace("{comments}", dj["comments"])
-                    p["desc"] = r_pgm["description"] + live_description.replace("{presenter}", dj["name"]).replace("{comments}", dj["comments"]).replace("{image_url}", dj["art"])
-                    p["credits"].append({"presenter": {"name": dj["name"], "image": dj["art"]}})
+                    p["sub-title"] = live_subtitle.replace(
+                        "{presenter}", dj["name"]).replace("{comments}", dj["comments"])
+                    p["desc"] = r_pgm["description"] + live_description.replace("{presenter}", dj["name"]).replace(
+                        "{comments}", dj["comments"]).replace("{image_url}", dj["art"])
+                    p["credits"].append(
+                        {"presenter": {"name": dj["name"], "image": dj["art"]}})
                 else:
                     # streamer not provided, make for some general niceness
-                    p["title"] = live_title.replace("{presenter}", r_pgm["name"])
-                    p["sub-title"] = live_subtitle.replace("{presenter}", r_pgm["name"]).replace("{comments}", '')
-                    p["desc"] = r_pgm["description"] + live_description.replace("{presenter}", r_pgm["name"]).replace("{comments}", '').replace("{image_url}", '')
+                    p["title"] = live_title.replace(
+                        "{presenter}", r_pgm["name"])
+                    p["sub-title"] = live_subtitle.replace(
+                        "{presenter}", r_pgm["name"]).replace("{comments}", '')
+                    p["desc"] = r_pgm["description"] + live_description.replace(
+                        "{presenter}", r_pgm["name"]).replace("{comments}", '').replace("{image_url}", '')
                     p["credits"].append({"presenter": {"name": r_pgm["name"]}})
 
             programmes.append(p)
 
-    #print(json.dumps(programmes, indent=2))
+    # print(json.dumps(programmes, indent=2))
 
     # and here starts the tedious work of removing the duplicates...
     # de-duplicate using a set (returns an unsorted list!)
@@ -437,8 +466,8 @@ def get_programme(api, station, num_days=num_days):
     # sort by start time
     programmes = sorted(programmes, key=lambda k: k['start'])
 
-    #print('*'*79)
-    #print(json.dumps(programmes, indent=2))
+    # print('*'*79)
+    # print(json.dumps(programmes, indent=2))
 
     return programmes
 
@@ -447,7 +476,7 @@ def create_xmltv(stations, programmes, output_folder=''):
     """Create an XMLTV EPG for all stations"""
 
     # create outfile from folder + domain.name + '.xml'
-    outfile = output_folder+urlparse(instance_url).netloc+'.xml'
+    outfile = output_folder+urlparse(instance_url).hostname+'.xml'
     print(f"Writing XMLTV EPG file: {outfile}")
 
     # set up the root
@@ -496,7 +525,8 @@ def create_xmltv(stations, programmes, output_folder=''):
                     credit.text = v["name"]
                     for k1, v1 in v.items():
                         if k1 == "image":
-                            et.SubElement(credit, k1, attrib={"type": "person"}).text = v1
+                            et.SubElement(credit, k1, attrib={
+                                          "type": "person"}).text = v1
 
             et.SubElement(programme, "category",
                           attrib=attrib_lang).text = r_pgm["category"]
@@ -512,7 +542,7 @@ def create_xmltv(stations, programmes, output_folder=''):
 def my_url(arg):
     """Check if valid URL given"""
     url = urlparse(arg)
-    if all((url.scheme, url.netloc)):
+    if all((url.scheme, url.netloc)) :
         return arg
     raise argparse.ArgumentTypeError('Invalid URL')
 
@@ -551,7 +581,7 @@ Edit '{argparse._sys.argv[0]}' using a text editor
 to change some defaults near the top of the file.
 
 Please report any issues to {APPURL}/issues.""",
-                                 formatter_class=argparse.RawDescriptionHelpFormatter) # ArgumentDefaultsHelpFormatter
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)  # ArgumentDefaultsHelpFormatter
 parser.add_argument('-v', '--version', action='version',
                     version='%(prog)s ' + __version__)
 parser.add_argument('-u', '--url', type=my_url, default=instance_url,
@@ -583,8 +613,9 @@ num_days = args.days
 api = azuracast_api(instance_url, api_key)
 
 # Get stations from this AzuraCast instance
-stations = get_stations(api, channel_icon_url=channel_icon_url, public_only=public_only)
-#print(json.dumps(stations, indent=2))
+stations = get_stations(
+    api, channel_icon_url=channel_icon_url, public_only=public_only)
+# print(json.dumps(stations, indent=2))
 
 # Create M3U playlist files
 if make_m3u:
@@ -595,7 +626,7 @@ if make_m3u:
 programmes = []
 for station in stations:
     programmes.append(get_programme(api, station, num_days))
-#print(json.dumps(programmes, indent=2))
+# print(json.dumps(programmes, indent=2))
 
 # Create XMLTV file
 create_xmltv(stations, programmes, output_folder=output_folder)
