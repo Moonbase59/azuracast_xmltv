@@ -283,6 +283,9 @@ _EPG in KODI_
 ![Moonbase_001](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/4a5f84a0-64e9-4360-87dd-58e836fd1610)  
 _Hypnotix, the Linux Mint IPTV player (no EPG yet)_
 
+![Robert Long - Komisch_001](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/aa22201a-0c37-47ae-8f03-11c54f6c3b72)  
+_Celluloid, a GTK+ frontend for mpv (no EPG)_
+
 
 ## API Key
 
@@ -323,7 +326,8 @@ I can’t give support for the many applications that use this format, but here�
 - [Emby](https://emby.media/) - (non-free)
 - [TVHeadend](https://tvheadend.org/)\* - TV Streaming Server and Recorder
 - [Hypnotix](https://github.com/linuxmint/hypnotix)\* - The Linux Mint IPTV player (no EPG yet)
-- [VLC](https://www.videolan.org/vlc/)\* - The VLC media player
+- [Celluloid](https://github.com/celluloid-player/celluloid)\* - A simple GTK+ frontend for mpv (no EPG); default video player in Linux Mint
+- [VLC](https://www.videolan.org/vlc/)\* - The VLC media player (no EPG)
 - xTeVe\* ([GitHub](https://github.com/xteve-project/xTeVe)) ([Documentation](https://github.com/xteve-project/xTeVe-Documentation/blob/master/en/configuration.md)) - M3U Proxy, recommended
 
 Many others are out there in the wild. Consult their documentation to find how to set up "XMLTV" or "IPTV". In KODI, some are under "PVR …" (Personal Video Recorder).
