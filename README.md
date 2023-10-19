@@ -282,7 +282,7 @@ _EPG in Jellyfin_
 ![screenshot00001](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/765941a4-a4be-4bfd-8e22-f8fbf8f2559d)  
 _EPG in KODI_
 
-Some applications have no EPG support (yet), but are still nice to use. **You can use the M3U tuner file `azuracast_xmltv_ generates** with these:
+Some applications have no EPG support (yet), but are still nice to use. **You can use the M3U tuner file `azuracast_xmltv` generates** with these:
 
 ![Moonbase_001](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/4a5f84a0-64e9-4360-87dd-58e836fd1610)  
 _Hypnotix, the Linux Mint IPTV player (no EPG yet)_
