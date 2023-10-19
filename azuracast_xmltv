@@ -547,8 +547,8 @@ and use the -a/--apikey option, which allows:
     streamer comment field as a description
   - showing extra info for syndicated content (remote playlists)
 
-Edit '{argparse._sys.argv[0]}' using a text editor to change
-some defaults near the top of the file.
+Edit '{argparse._sys.argv[0]}' using a text editor
+to change some defaults near the top of the file.
 
 Please report any issues to {APPURL}/issues.""",
                                  formatter_class=argparse.RawDescriptionHelpFormatter) # ArgumentDefaultsHelpFormatter
