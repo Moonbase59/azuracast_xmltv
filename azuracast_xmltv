@@ -37,12 +37,15 @@
 #         Not all clients may support this (they'll just ignore it).
 #       - customizable listener requests info (for playlists that have requests enabled)
 #       - customizable syndication info (for playlists that are remote streams)
+# 2023-10-19 - Moonbase59 . v0.5.1
+#   -   Add 'User-Agent' header for API request, so azuracast_xmltv can be better identified
 
 # version info
-__version_info__ = ('0', '5', '0')
+__version_info__ = ('0', '5', '1')
 __version__ = '.'.join(__version_info__)
 
-APPNAME = "azuracast_xmltv " + __version__
+APPNAME = "azuracast_xmltv "
+VERSION = __version__
 LICENSE = "MIT"
 APPURL = "https://github.com/Moonbase59/azuracast_xmltv"
 
@@ -172,12 +175,16 @@ class azuracast_api():
         self.status_code = 0
         if api_key:
             self.headers = {
+                "User-Agent": f"{APPNAME}/{VERSION} +{APPURL}",
                 "accept": "application/json",
+                "X-Clacks-Overhead": "GNU Terry Pratchett, Leonard Nimoy",
                 "X-API-Key": api_key
             }
         else:
             self.headers = {
+                "User-Agent": f"{APPNAME}/{VERSION} +{APPURL}"
                 "accept": "application/json"
+                "X-Clacks-Overhead": "GNU Terry Pratchett, Leonard Nimoy"
             }
 
     def get(self, endpoint, params={}, quit_on_error=False):
@@ -451,7 +458,7 @@ def create_xmltv(stations, programmes, output_folder=''):
                       attrib={"date": date,
                               "source-info-url": instance_url,
                               "source-info-name": urlparse(instance_url).netloc,
-                              "generator-info-name": APPNAME,
+                              "generator-info-name": APPNAME + ' ' + VERSION,
                               "generator-info-url": APPURL
                               })
 
