@@ -331,7 +331,7 @@ Here are some links for looking up related items:
 - [XMLTV.org](https://xmltv.org)
 - [Kodi: IPTV einrichten](https://www.heise.de/tipps-tricks/Kodi-IPTV-einrichten-4676549.html) - (heise online; German)
 - [What is Live TV, PVR and Radio?](https://kodi.wiki/view/PVR) - (KODI FAQ)
-- [PVR IPTV Simple Client](https://kodi.wiki/view/Add-on:PVR_IPTV_Simple_Client) - IPTV client for KODI
+- [PVR IPTV Simple Client](https://kodi.wiki/view/Add-on:PVR_IPTV_Simple_Client)\* - IPTV client for KODI
 - [Kodinerds](https://www.kodinerds.net/) - KODI-related German Forum
 - [Kodinerds IPTV - Freie und legale Streams für Kodi](https://github.com/jnk22/kodinerds-iptv) - Free and legal streams for IPTV; German, but has international channels.
 - [ErsatzTV](https://ersatztv.org/)\* - Your Personal IPTV Server
