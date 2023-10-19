@@ -1,6 +1,6 @@
 # azuracast_xmltv
 
-**Create rich XMLTV Tuner and EPG files from an AzuraCast Web Radio.**
+**Create rich XMLTV Tuner and EPG files from an [AzuraCast](https://www.azuracast.com/) Web Radio.**
 
 Note this _may_ work on Windows machines, but I don’t know. I’m a Linux guy.
 
