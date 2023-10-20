@@ -430,26 +430,27 @@ def create_m3u(station, output_folder=''):
 
 def create_gap_fillers(station, programmes):
     """Find gaps between programmes, return list of "gap filler" entries"""
-    
+
     if len(programmes) <= 1:
         return []
-    
+
     # find playlists that constitute the general rotation
     # (enabled, type default, not on schedule)
-    pl = [item for item in station["playlists"] if item["type"] == "default" and not item["is_scheduled"]]
+    pl = [item for item in station["playlists"] if item["type"]
+          == "default" and not item["is_scheduled"]]
 
     # make a comma-separated string where the last element is separated by '&' instead
     # ex: '', 'a', 'a & b', 'a, b & c', ...
     names = [item["name"] for item in pl]
     playlists = ' & '.join(filter(None, [', '.join(names[:-1])] + names[-1:]))
-    
+
     # see if any of them have requests enabled
     requests_enabled = any(
         [item for item in pl if item["include_in_requests"]])
 
     # sort by start times
-    programmes = sorted(programmes, key=lambda x:x['start'])
-    
+    programmes = sorted(programmes, key=lambda x: x['start'])
+
     # set up text replacers
     replacers = {
         "{playlists}": playlists,
@@ -461,17 +462,18 @@ def create_gap_fillers(station, programmes):
     }
 
     gaps = []
-    
+
     # start at the end of the first range
     now = programmes[0]['stop']
-    
+
     # iterate through programmes, ignoring the first range
     for pair in programmes[1:]:
         # if next start time is before current stop time, keep going until we find a gap
         # if next start time is after current end time, found the first gap
         if pair['start'] > now:
             # create a new gap filler programme
-            replacers["{year}"] = pair["start"][0:4] # use programme's start year for '{year}'
+            # use programme's start year for '{year}'
+            replacers["{year}"] = pair["start"][0:4]
             p = {
                 "channel": station["channel_id"],
                 "start": now,
@@ -486,11 +488,14 @@ def create_gap_fillers(station, programmes):
             if requests_enabled:
                 replacers["{playlist}"] = p["title"]
                 p["title"] = replace_vars(replacers, requests_enabled_title)
-                p["sub-title"] = replace_vars(replacers, requests_enabled_subtitle)
-                p["desc"] = p["desc"] + replace_vars(replacers, requests_enabled_description)
-            
+                p["sub-title"] = replace_vars(replacers,
+                                              requests_enabled_subtitle)
+                p["desc"] = p["desc"] + \
+                    replace_vars(replacers, requests_enabled_description)
+
             # add extra info to description
-            p["desc"] = p["desc"].rstrip() + replace_vars(replacers, append_to_description)
+            p["desc"] = p["desc"].rstrip() + replace_vars(replacers,
+                                                          append_to_description)
 
             # remove leftover whitespace from description
             p["desc"] = clean(p["desc"])
@@ -569,9 +574,12 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                         "{player_url}": station["public_player_url"],
                         "{year}": r_pgm["start"][0:4]
                     }
-                    p["title"] = replace_vars(replacers, requests_enabled_title)
-                    p["sub-title"] = replace_vars(replacers, requests_enabled_subtitle)
-                    p["desc"] = r_pgm["description"].rstrip() + replace_vars(replacers, requests_enabled_description)
+                    p["title"] = replace_vars(
+                        replacers, requests_enabled_title)
+                    p["sub-title"] = replace_vars(replacers,
+                                                  requests_enabled_subtitle)
+                    p["desc"] = r_pgm["description"].rstrip(
+                    ) + replace_vars(replacers, requests_enabled_description)
 
                 # playlist is syndicated content (remote)
                 if pl and pl["source"] == "remote_url":
@@ -586,7 +594,8 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                     }
                     p["title"] = replace_vars(replacers, remote_title)
                     p["sub-title"] = replace_vars(replacers, remote_subtitle)
-                    p["desc"] = r_pgm["description"].rstrip() + replace_vars(replacers, remote_description)
+                    p["desc"] = r_pgm["description"].rstrip(
+                    ) + replace_vars(replacers, remote_description)
 
             # try to enrich programme with streamer info
             if r_pgm["type"] == "streamer":
@@ -609,7 +618,8 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
 
                     p["title"] = replace_vars(replacers, live_title)
                     p["sub-title"] = replace_vars(replacers, live_subtitle)
-                    p["desc"] = r_pgm["description"].rstrip() + replace_vars(replacers, live_description)
+                    p["desc"] = r_pgm["description"].rstrip(
+                    ) + replace_vars(replacers, live_description)
                     p["credits"].append(
                         {"presenter": {"name": dj["name"], "image": dj["art"]}})
                 else:
@@ -626,7 +636,8 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                     }
                     p["title"] = replace_vars(replacers, live_title)
                     p["sub-title"] = replace_vars(replacers, live_subtitle)
-                    p["desc"] = r_pgm["description"].rstrip() + replace_vars(replacers, live_description)
+                    p["desc"] = r_pgm["description"].rstrip(
+                    ) + replace_vars(replacers, live_description)
                     p["credits"].append({"presenter": {"name": r_pgm["name"]}})
 
             # add extra info to description
@@ -637,7 +648,8 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                 "{player_url}": station["public_player_url"],
                 "{year}": r_pgm["start"][0:4]
             }
-            p["desc"] = p["desc"].rstrip() + replace_vars(replacers, append_to_description)
+            p["desc"] = p["desc"].rstrip() + replace_vars(replacers,
+                                                          append_to_description)
 
             # remove extra whitespace from description
             p["desc"] = clean(p["desc"])
@@ -729,7 +741,7 @@ def create_xmltv(stations, programmes, output_folder=''):
 def my_url(arg):
     """Check if valid URL given"""
     url = urlparse(arg)
-    if all((url.scheme, url.netloc)) :
+    if all((url.scheme, url.netloc)):
         return arg
     raise argparse.ArgumentTypeError('Invalid URL')
 
