@@ -87,7 +87,7 @@ If you don’t want the success/failure mails, simply send its output to `/dev/n
 
 From the help screen:
 ```
-usage: azuracast_xmltv [-h] [-v] [-u URL] [-i URL] [-d DAYS] [-o FOLDER]
+usage: azuracast_xmltv [-h] [-v] [-u URL] [-i URL] [-d DAYS] [-f] [-o FOLDER]
                        [-a APIKEY] [-p] [-m]
 
 Create XMLTV Tuner and EPG files from an AzuraCast Web Radio.
@@ -99,6 +99,8 @@ options:
   -i URL, --icon URL    URL to a channel icon; will use station's default
                         album art if omitted
   -d DAYS, --days DAYS  number of days to include in the EPG
+  -f, --fillgaps        fill gaps between programmes with a 'General Rotation'
+                        entry
   -o FOLDER, --output FOLDER
                         output folder for XMLTV files
   -a APIKEY, --apikey APIKEY
@@ -119,8 +121,8 @@ and use the -a/--apikey option, which allows:
     streamer comment field as a description
   - showing extra info for syndicated content (remote playlists)
 
-Edit './azuracast_xmltv' using a text editor to change
-some defaults near the top of the file.
+Edit './azuracast_xmltv' using a text editor
+to change some defaults near the top of the file.
 
 Please report any issues to https://github.com/Moonbase59/azuracast_xmltv/issues.
 ```
@@ -254,6 +256,53 @@ As an example, I used
 - Nite Radio Testbild
 
 The HLS stream (if you have one), will automatically be named `<Your Station Name> (HLS)`.
+
+## Fill the gaps between scheduled shows
+
+You don’t have many scheduled shows but a 24/7 station and **want to show that something is playing** in the EPG?
+
+`azuracast_xmltv` has the concept of _fillers_. Just use the `-f`/`--fillgaps` option and it will create nice programme entries for the times in between shows, and your listeners will know something is playing on the station.
+
+The filler logic takes the playlist names that constitute your general rotation (enabled, type default, not on schedule), so **name your playlists wisely**. Let’s say you had a general rotation built of the 'Classic Rock', 'Folk Rock' and 'Hard Rock' playlist. `azuracast_xmltv` then generates a `{playlists}` variable for you that looks like `Classic Rock, Folk Rock & Hard Rock` and can be used in the configuration.
+
+The default filler **can be configured in the options** near the start of the script file:
+
+```python
+# "Gap Filler" text to be shown when a programme is actually a gap filler.
+# After parsing, the gap_filler_title will be used as playlist name and the result
+# RE-PARSED by the requests_enabled parser, if ANY of the involved playlists has
+# requests enabled. Descriptions from here and the requests enabled parsing will
+# be APPENDED to each other (the request text coming beneath).
+
+# this will be used as a programme's title
+gap_filler_title = "24/7 Rock"
+# this will be used as a programme's subtitle
+gap_filler_subtitle = "{playlists}"
+# this will be the programme's description
+# Your text should make sense even if {playlists} is empty!
+# Multiple successive blanks will be automatically replaced by a single blank.
+gap_filler_description = """Your favorite sound, 24 hours a day, 7 days a week.
+The best {playlists} in {year} — just here, on {station_name}."""
+```
+
+With our example, the generated EPG playlist entry would then look like this:
+
+```xml
+<programme start="20231020170000 +0200" stop="20231020180000 +0200" channel="niteradio.example.com">
+  <title lang="en">24/7 Rock</title>
+  <sub-title lang="en">Classic Rock, Folk Rock &amp; Hard Rock</sub-title>
+  <desc lang="en">Your favorite sound, 24 hours a day, 7 days a week.
+The best Classic Rock, Folk Rock &amp; Hard Rock in 2023 — just here, on Nite Radio.
+
+Programm Copyright © 2023 Nite Radio — Non-public test &amp; evaluation server only
+Visit us on https://example.com</desc>
+  <credits/>
+  <category lang="en">Music</category>
+</programme>
+```
+
+(The copyright part coming from another element, namely the `append_to_description` text.)
+
 
 ## Validation and other nice tools
 
