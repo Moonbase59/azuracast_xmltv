@@ -45,10 +45,23 @@
 #     We still leave 'netloc' in the EPG as 'source-info-name' so we know where it
 #     really came from.
 #   - PEP8 formatting.
+# 2023-10-19 - Moonbase - v0.6.0
+#   - add option -f/--fillgaps and logic to find gaps between programmes and fill them
+#     with dummy entries. This can be used for stations that have a 24/7
+#     general rotation and wish to advertise playout in between show blocks.
+#     If an API key is used, this can also include the playlist names involved
+#     to build the general rotation. Name your playlists appropriately.
+#     If ANY of the involved playlists has listener requests enabled,
+#     this will be shown (using the requests_enabled parsing).
+#   - removed superfluous whitespace in programme description, also eliminating
+#     extra spaces/newlines left over from using empty variables.
+#   - MUCH improved "{variable}" parsing, and many more that can be used
+#   - added append_to_description text that can be added to EVERY programme,
+#     can be used for legalese, or website hints.
 
 # version info
 import sys
-__version_info__ = ('0', '5', '2')
+__version_info__ = ('0', '6', '0')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -67,11 +80,42 @@ instance_url = 'https://demo.azuracast.com'
 # EPG programme category to list (i.e. "Music", "Talk", ...)
 category = 'Music'
 
+# "Moustache-type" variables that can be used when generating programmes:
+# Those marked with a * are only available when using an API key,
+# i.e. on your own station. They will be empty otherwise.
+#
+# ALWAYS AVAILABLE:
+# - {station_name}
+# - {station_description}
+# - {station_website} -- the station website URL (not the AzuraCast URL)
+# - {player_url} -- station's web player URL
+# - {year} start year of the programme
+#
+# In "requests_enabled"*:
+# - {playlist} -- playlist name
+# - {request_url} -- station's public player URL
+#
+# In "remote"*:
+# - {playlist} -- playlist name
+# - {remote_url} -- remote URL used in the playlist
+#
+# In "live":
+# - {presenter} -- streamer/DJ name
+# - {image_url}* -- streamer's image URL
+# - {comments}* -- AzuraCast's Streamer Comments field content.
+#   Comments should be used with care:
+#   This field was originally meant for internal remarks only, you could leak data!
+#
+# In "gap_filler":
+# - {playlists}* -- comma-separated list of playlist names that make up the general rotation
+#   (enabled, type default, not on schedule).
+#   So if your general rotation was made up of the playlists
+#   'Classic Rock', 'Folk Rock' and 'Hard Rock', it would show
+#   "Classic Rock, Folk Rock & Hard Rock".
+
+
 # Text to add to a programme listing if listener requests are enabled
-# for this playlist. Only works when an API key is given, i.e., on your own station.
-# Placeholders:
-# - {playlist} will be replaced with the playlist name
-# - {request_url} will be replaced by the station's public player URL
+# for this playlist. Only works with API key.
 
 # this will be used as a programme's title
 requests_enabled_title = "{playlist} (requests enabled)"
@@ -80,45 +124,55 @@ requests_enabled_subtitle = "Your favorite station, YOUR music!"
 # this will be appended to a programme's description, maybe use starting newline(s)
 requests_enabled_description = """
 
-The request lines are open! Make this program YOURS by adding a request.
-
-Go to {request_url}, click on ›Request Song‹ and select your favorite.
-"""
+Request lines open! Make this program YOURS by adding a request.
+Go to {request_url}, click on ›Request Song‹ and select your favorite."""
 
 # Text to add to a programme listing if it is a syndicated playlist.
-# (source: remote_url). Only works when an API key is given, i.e., on your own station.
-# Placeholders:
-# - {playlist} will be replaced with the playlist name
-# - {remote_url} will be replaced by the remote URL used in the playlist
+# (source: remote_url). Only works with API key.
 
 # this will be used as a programme's title
 remote_title = "{playlist}"
 # this will be used as a programme's subtitle
 remote_subtitle = ""
-# this will be appended to a programme's description, maybe use starting newline(s)
+# this will be APPENDED to a programme's description
 remote_description = """
 
-(Syndicated content.)
-"""
+(Syndicated content.)"""
 
 # "Live" text to be shown when a streamer/DJ transmits a scheduled show
-# - {presenter} will be replaced with the streamer/DJ name (also works without API key)
-# - {image_url} will be replaced with the streamer's image URL (needs API key)
-# - {comments} will be replaced with AzuraCast's Streamer Comments field content.
-#   Comments only work with an API key, and should be used with care:
-#   This field was originally meant for internal remarks only, you could leak data!
+
 # this will be used as a programme's title
 live_title = "Live: {presenter}"
 # this will be used as a programme's subtitle
 live_subtitle = ""
-# this will be appended to a programme's description, maybe use starting newline(s)
+# this will be APPENDED to a programme's description
 # REMOVE {comments} if you use that field for internal remarks, else you LEAK INTERNALS!
 live_description = """
 
-Live Show, hosted by {presenter}.
+Live Show on {station_name}, hosted by {presenter}.
+{comments}"""
 
-{comments}
-"""
+# "Gap Filler" text to be shown when a programme is actually a gap filler.
+# After parsing, the gap_filler_title will be used as playlist name and the result
+# RE-PARSED by the requests_enabled parser, if ANY of the involved playlists has
+# requests enabled. Descriptions from here and the requests enabled parsing will
+# be APPENDED to each other (the request text coming beneath).
+
+# this will be used as a programme's title
+gap_filler_title = "24/7 Rock"
+# this will be used as a programme's subtitle
+gap_filler_subtitle = "{playlists}"
+# this will be the programme's description
+# Your text should make sense even if {playlists} is empty!
+# Multiple successive blanks will be automatically replaced by a single blank.
+gap_filler_description = """Your favorite sound, 24 hours a day, 7 days a week.
+The best {playlists} in {year} — just here, on {station_name}."""
+
+# Text to be appended to EVERY programme description (seldom needed)
+append_to_description = """
+
+Program Copyright © {year} {station_name} — {station_description}
+Visit us on {station_website}"""
 
 # -a/--apikey option default:
 # Add an AzuraCast API key here for extended functionality
@@ -150,6 +204,10 @@ output_folder = '.'
 # EPG for how many days?
 num_days = 7
 
+# -f/--fillgaps option default:
+# Fill gaps in a station's programmes (True/False)?
+fill_gaps = False
+
 # *** END OF USER CONFIGURABLE DEFAULTS -- DO NOT MODIFY ANYTHING BELOW ***
 
 
@@ -168,7 +226,7 @@ try:
     from urllib.parse import urlparse
     import argparse
 except Exception as error:
-    print("Error:", type(error).__name__, "–", error)
+    eprint("Error:", type(error).__name__, "–", error)
     exit(1)
 
 
@@ -180,19 +238,13 @@ class azuracast_api():
         self.api_key = api_key
         self.timeout = timeout  # default None = until connection closed
         self.status_code = 0
+        self.headers = {
+            "User-Agent": f"{APPNAME}/{VERSION} +{APPURL}",
+            "accept": "application/json",
+            "X-Clacks-Overhead": "GNU Terry Pratchett, Leonard Nimoy"
+        }
         if api_key:
-            self.headers = {
-                "User-Agent": f"{APPNAME}/{VERSION} +{APPURL}",
-                "accept": "application/json",
-                "X-Clacks-Overhead": "GNU Terry Pratchett, Leonard Nimoy",
-                "X-API-Key": api_key
-            }
-        else:
-            self.headers = {
-                "User-Agent": f"{APPNAME}/{VERSION} +{APPURL}",
-                "accept": "application/json",
-                "X-Clacks-Overhead": "GNU Terry Pratchett, Leonard Nimoy"
-            }
+            self.headers["X-API-Key"] = api_key
 
     def get(self, endpoint, params={}, quit_on_error=False):
         try:
@@ -225,12 +277,30 @@ def sanitize(name):
     return ''.join(c for c in name if c.isalnum() or c in keep)
 
 
+def clean(description):
+    """Remove all leftover whitespace from a programme description, not using re"""
+    text = description.strip()
+    lines = [line.split() for line in text.splitlines()]
+    return '\n'.join(' '.join(word for word in line) for line in lines)
+
+
+def replace_vars(dictionary, text):
+    """replace moustache-type variables in text"""
+    # The dictionary is a simple key, value dict like so:
+    # {
+    #   "{variable1}": "replacement text 1",
+    #   "{variable2}": "replacement 2"
+    # }
+    for variable in dictionary:
+        text = text.replace(variable, dictionary[variable])
+    return text
+
+
 def get_stations(api, channel_icon_url='', public_only=True):
     """Get station info from this instance"""
     stations = []
 
     r = api.get('/stations')
-    # print(json.dumps(r, indent=2))
 
     for station in r:
         # get station's default album art; we use this as station logo
@@ -266,7 +336,6 @@ def get_stations(api, channel_icon_url='', public_only=True):
             # get mount info, to include otherwise invisible mounts
             rm = api.get(
                 '/station/' + str(station["id"]) + '/mounts', quit_on_error=True)
-            # print(json.dumps(rm, indent=2))
 
             for mount in rm:
                 m = {
@@ -290,11 +359,13 @@ def get_stations(api, channel_icon_url='', public_only=True):
                 p = {
                     "id": playlist["id"],
                     "name": playlist["name"],
+                    "type": playlist["type"],
                     "source": playlist["source"],
                     "remote_url": playlist["remote_url"],
                     "is_jingle": playlist["is_jingle"],
                     "include_in_on_demand": playlist["include_in_on_demand"],
-                    "include_in_requests": playlist["include_in_requests"]
+                    "include_in_requests": playlist["include_in_requests"],
+                    "is_scheduled": playlist["schedule_items"] != []
                 }
                 if playlist["is_enabled"]:
                     s["playlists"].append(p)
@@ -357,7 +428,82 @@ def create_m3u(station, output_folder=''):
             f.write(mount['url']+'\n')
 
 
-def get_programme(api, station, num_days=num_days):
+def create_gap_fillers(station, programmes):
+    """Find gaps between programmes, return list of "gap filler" entries"""
+    
+    if len(programmes) <= 1:
+        return []
+    
+    # find playlists that constitute the general rotation
+    # (enabled, type default, not on schedule)
+    pl = [item for item in station["playlists"] if item["type"] == "default" and not item["is_scheduled"]]
+
+    # make a comma-separated string where the last element is separated by '&' instead
+    # ex: '', 'a', 'a & b', 'a, b & c', ...
+    names = [item["name"] for item in pl]
+    playlists = ' & '.join(filter(None, [', '.join(names[:-1])] + names[-1:]))
+    
+    # see if any of them have requests enabled
+    requests_enabled = any(
+        [item for item in pl if item["include_in_requests"]])
+
+    # sort by start times
+    programmes = sorted(programmes, key=lambda x:x['start'])
+    
+    # set up text replacers
+    replacers = {
+        "{playlists}": playlists,
+        "{request_url}": station["public_player_url"],
+        "{station_name}": station["name"],
+        "{station_description}": station["description"],
+        "{station_website}": station["url"],
+        "{player_url}": station["public_player_url"]
+    }
+
+    gaps = []
+    
+    # start at the end of the first range
+    now = programmes[0]['stop']
+    
+    # iterate through programmes, ignoring the first range
+    for pair in programmes[1:]:
+        # if next start time is before current stop time, keep going until we find a gap
+        # if next start time is after current end time, found the first gap
+        if pair['start'] > now:
+            # create a new gap filler programme
+            replacers["{year}"] = pair["start"][0:4] # use programme's start year for '{year}'
+            p = {
+                "channel": station["channel_id"],
+                "start": now,
+                "stop": pair["start"],
+                "title": replace_vars(replacers, gap_filler_title),
+                "sub-title": replace_vars(replacers, gap_filler_subtitle),
+                "desc": replace_vars(replacers, gap_filler_description),
+                "category": category,
+                "credits": []
+            }
+            # parse again if listener requests enabled
+            if requests_enabled:
+                replacers["{playlist}"] = p["title"]
+                p["title"] = replace_vars(replacers, requests_enabled_title)
+                p["sub-title"] = replace_vars(replacers, requests_enabled_subtitle)
+                p["desc"] = p["desc"] + replace_vars(replacers, requests_enabled_description)
+            
+            # add extra info to description
+            p["desc"] = p["desc"].rstrip() + replace_vars(replacers, append_to_description)
+
+            # remove leftover whitespace from description
+            p["desc"] = clean(p["desc"])
+
+            gaps.append(p)
+
+        # need to advance 'now' only if the next end time is past the current end time
+        now = max(pair['stop'], now)
+
+    return gaps
+
+
+def get_programme(api, station, num_days=num_days, fill_gaps=False):
     """Get a channel's programme"""
 
     programmes = []
@@ -391,7 +537,6 @@ def get_programme(api, station, num_days=num_days):
             '/station/' + str(station["id"]) + '/schedule', params=params)
         if api.fail():
             return programmes
-        # print(json.dumps(r, indent=2))
 
         for r_pgm in r:
             p = {
@@ -415,20 +560,33 @@ def get_programme(api, station, num_days=num_days):
 
                 # playlist has listener requests enabled, enrich title, sub-title, and description
                 if pl and pl["include_in_requests"]:
-                    p["title"] = requests_enabled_title.replace(
-                        "{playlist}", pl["name"])
-                    p["sub-title"] = requests_enabled_subtitle.replace(
-                        "{playlist}", pl["name"]).replace("{request_url}", station["public_player_url"])
-                    p["desc"] = r_pgm["description"] + requests_enabled_description.replace(
-                        "{playlist}", pl["name"]).replace("{request_url}", station["public_player_url"])
+                    replacers = {
+                        "{playlist}": pl["name"],
+                        "{request_url}": station["public_player_url"],
+                        "{station_name}": station["name"],
+                        "{station_description}": station["description"],
+                        "{station_website}": station["url"],
+                        "{player_url}": station["public_player_url"],
+                        "{year}": r_pgm["start"][0:4]
+                    }
+                    p["title"] = replace_vars(replacers, requests_enabled_title)
+                    p["sub-title"] = replace_vars(replacers, requests_enabled_subtitle)
+                    p["desc"] = r_pgm["description"].rstrip() + replace_vars(replacers, requests_enabled_description)
 
                 # playlist is syndicated content (remote)
                 if pl and pl["source"] == "remote_url":
-                    p["title"] = remote_title.replace("{playlist}", pl["name"])
-                    p["sub-title"] = remote_subtitle.replace(
-                        "{playlist}", pl["name"]).replace("{remote_url}", pl["remote_url"])
-                    p["desc"] = r_pgm["description"] + remote_description.replace(
-                        "{playlist}", pl["name"]).replace("{remote_url}", pl["remote_url"])
+                    replacers = {
+                        "{playlist}": pl["name"],
+                        "{remote_url}": station["public_player_url"],
+                        "{station_name}": station["name"],
+                        "{station_description}": station["description"],
+                        "{station_website}": station["url"],
+                        "{player_url}": station["public_player_url"],
+                        "{year}": r_pgm["start"][0:4]
+                    }
+                    p["title"] = replace_vars(replacers, remote_title)
+                    p["sub-title"] = replace_vars(replacers, remote_subtitle)
+                    p["desc"] = r_pgm["description"].rstrip() + replace_vars(replacers, remote_description)
 
             # try to enrich programme with streamer info
             if r_pgm["type"] == "streamer":
@@ -438,36 +596,65 @@ def get_programme(api, station, num_days=num_days):
 
                 if dj:
                     # found the streamer, use their info (and image)
-                    p["title"] = live_title.replace("{presenter}", dj["name"])
-                    p["sub-title"] = live_subtitle.replace(
-                        "{presenter}", dj["name"]).replace("{comments}", dj["comments"])
-                    p["desc"] = r_pgm["description"] + live_description.replace("{presenter}", dj["name"]).replace(
-                        "{comments}", dj["comments"]).replace("{image_url}", dj["art"])
+                    replacers = {
+                        "{presenter}": dj["name"],
+                        "{image_url}": dj["art"],
+                        "{comments}": dj["comments"],
+                        "{station_name}": station["name"],
+                        "{station_description}": station["description"],
+                        "{station_website}": station["url"],
+                        "{player_url}": station["public_player_url"],
+                        "{year}": r_pgm["start"][0:4]
+                    }
+
+                    p["title"] = replace_vars(replacers, live_title)
+                    p["sub-title"] = replace_vars(replacers, live_subtitle)
+                    p["desc"] = r_pgm["description"].rstrip() + replace_vars(replacers, live_description)
                     p["credits"].append(
                         {"presenter": {"name": dj["name"], "image": dj["art"]}})
                 else:
                     # streamer not provided, make for some general niceness
-                    p["title"] = live_title.replace(
-                        "{presenter}", r_pgm["name"])
-                    p["sub-title"] = live_subtitle.replace(
-                        "{presenter}", r_pgm["name"]).replace("{comments}", '')
-                    p["desc"] = r_pgm["description"] + live_description.replace(
-                        "{presenter}", r_pgm["name"]).replace("{comments}", '').replace("{image_url}", '')
+                    replacers = {
+                        "{presenter}": r_pgm["name"],
+                        "{image_url}": '',
+                        "{comments}": '',
+                        "{station_name}": station["name"],
+                        "{station_description}": station["description"],
+                        "{station_website}": station["url"],
+                        "{player_url}": station["public_player_url"],
+                        "{year}": r_pgm["start"][0:4]
+                    }
+                    p["title"] = replace_vars(replacers, live_title)
+                    p["sub-title"] = replace_vars(replacers, live_subtitle)
+                    p["desc"] = r_pgm["description"].rstrip() + replace_vars(replacers, live_description)
                     p["credits"].append({"presenter": {"name": r_pgm["name"]}})
 
-            programmes.append(p)
+            # add extra info to description
+            replacers = {
+                "{station_name}": station["name"],
+                "{station_description}": station["description"],
+                "{station_website}": station["url"],
+                "{player_url}": station["public_player_url"],
+                "{year}": r_pgm["start"][0:4]
+            }
+            p["desc"] = p["desc"].rstrip() + replace_vars(replacers, append_to_description)
 
-    # print(json.dumps(programmes, indent=2))
+            # remove extra whitespace from description
+            p["desc"] = clean(p["desc"])
+
+            programmes.append(p)
 
     # and here starts the tedious work of removing the duplicates...
     # de-duplicate using a set (returns an unsorted list!)
     set_of_jsons = {json.dumps(d, sort_keys=True) for d in programmes}
     programmes = [json.loads(t) for t in set_of_jsons]
+
+    # fill any gaps between programmes, if so requested
+    if fill_gaps:
+        programmes = programmes + create_gap_fillers(station, programmes)
+
     # sort by start time
     programmes = sorted(programmes, key=lambda k: k['start'])
-
-    # print('*'*79)
-    # print(json.dumps(programmes, indent=2))
 
     return programmes
 
@@ -590,6 +777,8 @@ parser.add_argument('-i', '--icon', metavar='URL', type=my_icon_url, default=cha
                     help='URL to a channel icon; will use station\'s default album art if omitted')
 parser.add_argument('-d', '--days', type=int, default=num_days,
                     help='number of days to include in the EPG')
+parser.add_argument('-f', '--fillgaps', action='store_true',
+                    default=fill_gaps, help='fill gaps between programmes with a \'General Rotation\' entry')
 parser.add_argument('-o', '--output', metavar='FOLDER', type=my_path,
                     default=output_folder, help='output folder for XMLTV files')
 parser.add_argument('-a', '--apikey', default=api_key,
@@ -608,6 +797,7 @@ output_folder = args.output + '/'
 make_m3u = args.m3u
 channel_icon_url = args.icon
 num_days = args.days
+fill_gaps = args.fillgaps
 
 # Init the AzuraCast API
 api = azuracast_api(instance_url, api_key)
@@ -615,7 +805,6 @@ api = azuracast_api(instance_url, api_key)
 # Get stations from this AzuraCast instance
 stations = get_stations(
     api, channel_icon_url=channel_icon_url, public_only=public_only)
-# print(json.dumps(stations, indent=2))
 
 # Create M3U playlist files
 if make_m3u:
@@ -625,8 +814,7 @@ if make_m3u:
 # Get schedules from all stations
 programmes = []
 for station in stations:
-    programmes.append(get_programme(api, station, num_days))
-# print(json.dumps(programmes, indent=2))
+    programmes.append(get_programme(api, station, num_days, fill_gaps))
 
 # Create XMLTV file
 create_xmltv(stations, programmes, output_folder=output_folder)
