@@ -10,6 +10,12 @@ The big picture behind this is to create **standards-compliant files** to
  
 Therefore I recommend regenerating the files periodically and **linking to them on your website**, so your listeners can point their media centers/players directly at these links and stay up-to-date with your station(s).
 
+Unfortunately, there isn’t a "standard" location for this yet. Maybe we should all start using `https://domain.tld/xmltv` for that, and
+- put an `index.html` (or other) file there that lists the available links in human-readable form,
+- use this as a base location for the `m3u` and `xml` files (i.e., get your station data by pointing to `https://domain.tld/xmltv/station.m3u` and get the EPG by pointing to `https://domain.tld/xmltv/domain.tld.xml`.
+
+It would make things so much easier for server operators and listeners alike.
+
 You’ll get **one M3U file per station** (containing that station's streams) and **one XML EPG file per AzuraCast instance** (containing the scheduled programs for all your stations).
 
 **Want to see some screenshots** before you bother to read all this? → [Here we go!](https://github.com/Moonbase59/azuracast_xmltv/blob/master/README.md#some-screenshots-this-is-how-it-looks-like)
