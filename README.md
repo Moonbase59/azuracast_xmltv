@@ -5,7 +5,7 @@
 The big picture behind this is to create **standards-compliant files** to
 - **easily access your station(s)** from almost any media player or server
 - get **better distribution** by providing interested listeners with
-  - an easy acess to your stations and streams
+  - an easy access to your stations and streams
   - an electronic program guide (EPG) so they can actively tune in to your shows
  
 Therefore I recommend regenerating the files periodically and **linking to them on your website**, so your listeners can point their media centers/players directly at these links and stay up-to-date with your station(s) automatically.
@@ -18,7 +18,7 @@ It would make things so much easier for server operators and listeners alike.
 
 You’ll get **one M3U file per station** (containing that station's streams) and **one XML EPG file per AzuraCast instance** (containing the scheduled programs for all your stations).
 
-### Some screenshots: This is how it looks like
+### Some screenshots: This is what it looks like
 
 When validated, you can import your M3U "tuner" and the XML EPG into your media center and **enjoy a beautiful LiveTV EPG** (and playout, of course):
 
@@ -151,7 +151,7 @@ https://demo.azuracast.com/hls/azuratest_radio/live.m3u8
 ```
 
 ### XMLTV Electronic Program Guide (EPG) file (one per server)
-XMLTV/IPTV EPG data files are XML data files containg channel and program information. They must be compliant with the [XMLTV DTD](https://github.com/XMLTV/xmltv/blob/master/xmltv.dtd) and can be validated using the `tv_validate_file` tool, which can be installed on Debian-like systems with `sudo apt install xmltv-util`.
+XMLTV/IPTV EPG data files are XML data files containing channel and program information. They must be compliant with the [XMLTV DTD](https://github.com/XMLTV/xmltv/blob/master/xmltv.dtd) and can be validated using the `tv_validate_file` tool, which can be installed on Debian-like systems with `sudo apt install xmltv-util`.
 
 This package brings some other nice utilities, just try `tv_to_text <yourstation>.xml`.
 
@@ -294,7 +294,7 @@ With our example, the generated EPG playlist entry would then look like this:
   <desc lang="en">Your favorite sound, 24 hours a day, 7 days a week.
 The best Classic Rock, Folk Rock &amp; Hard Rock in 2023 — just here, on Nite Radio.
 
-Programm Copyright © 2023 Nite Radio — Non-public test &amp; evaluation server only
+Program Copyright © 2023 Nite Radio — Non-public test &amp; evaluation server only
 Visit us on https://example.com</desc>
   <credits/>
   <category lang="en">Music</category>
@@ -320,7 +320,7 @@ Validated ok.
 
 Here is another nice trick: Output the EPG as text in your terminal!
 
-```bash
+```
 tv_to_text niteradio.example.com.xml
 10-18 (Wednesday)
 
@@ -340,7 +340,7 @@ Generated from example.com by azuracast_xmltv 0.5.0.
 
 Or even with long descriptions:
 
-```bash
+```
 tv_to_text --with-desc radio.niteradio.net.xml 
 10-18 (Wednesday)
 
