@@ -10,7 +10,7 @@ The big picture behind this is to create **standards-compliant files** to
  
 Therefore I recommend regenerating the files periodically and **linking to them on your website**, so your listeners can point their media centers/players directly at these links and stay up-to-date with your station(s).
 
-You’ll get **one M3U file per station** (containing that station's streams) and **one XML EPG file per AzuraCast instance** (containg the scheduled programs for all your stations).
+You’ll get **one M3U file per station** (containing that station's streams) and **one XML EPG file per AzuraCast instance** (containing the scheduled programs for all your stations).
 
 **Want to see some screenshots** before you bother to read all this? → [Here we go!](https://github.com/Moonbase59/azuracast_xmltv/blob/master/README.md#some-screenshots-this-is-how-it-looks-like)
 
