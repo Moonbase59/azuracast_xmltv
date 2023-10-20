@@ -373,6 +373,7 @@ If you use an API key, it will allow:
   Not all clients may support this (they'll just ignore it).
 - customizable listener requests info (for playlists that have requests enabled)
 - customizable syndication info (for playlists that are remote streams)
+- gap filler `{playlists}` info
 
 \* This also works without an API key.
 
