@@ -2,9 +2,20 @@
 
 **Create rich XMLTV Tuner and EPG files from an [AzuraCast](https://www.azuracast.com/) Web Radio.**
 
-Note this _may_ work on Windows machines, but I don’t know. I’m a Linux guy.
+The big picture behind this is to create **standards-compliant files** to
+- **easily access your station(s)** from almost any media player or server
+- get **better distribution** by providing interested listeners with
+  - an easy acess to your stations and streams
+  - an electronic program guide (EPG) so they can actively tune in to your shows
+ 
+Therefore I recommend regenerating the files periodically and **linking to them on your website**, so your listeners can point their media centers/players directly at these links and stay up-to-date with your station(s).
+
+You’ll get **one M3U file per station** (containing that station's streams) and **one XML EPG file per AzuraCast instance** (containg all your station's scheduled programs).
 
 **Want to see some screenshots** before you bother to read all this? → [Here we go!](https://github.com/Moonbase59/azuracast_xmltv/blob/master/README.md#some-screenshots-this-is-how-it-looks-like)
+
+Note this _may_ work on Windows machines, but I don’t know. I’m a Linux guy.
+
 
 ## Installation
 
