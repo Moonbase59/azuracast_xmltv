@@ -8,7 +8,7 @@ The big picture behind this is to create **standards-compliant files** to
   - an easy acess to your stations and streams
   - an electronic program guide (EPG) so they can actively tune in to your shows
  
-Therefore I recommend regenerating the files periodically and **linking to them on your website**, so your listeners can point their media centers/players directly at these links and stay up-to-date with your station(s).
+Therefore I recommend regenerating the files periodically and **linking to them on your website**, so your listeners can point their media centers/players directly at these links and stay up-to-date with your station(s) automatically.
 
 Unfortunately, there isn’t a "standard" location for this yet. Maybe we should all start using `https://domain.tld/xmltv` for that, and
 - put an `index.html` (or other) file there that lists the available links in human-readable form,
