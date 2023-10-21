@@ -493,6 +493,53 @@ Near the beginning of the file, you’ll find many user-customizable options, mo
 
 You can also set defaults for most options here. These will be shown when `--help` is invoked.
 
+### `{moustache}`-type variables that can be used in customization
+
+Using this type of marking a _variable_ part of text is commonly used. While executing, `azuracast_xmltv` will replace these with the actual content, for example replace `{year}` with `2023` (if the programme starts in 2023). `azuracast_xmltv` will also automatically remove any leftover extra whitespace after replacing the variables.
+
+"Extra whitespace" is, for instance, multiple blanks in succession or extra linefeeds at the end of the text. This can happen when a variable to be replaced is actually empty.
+
+**An example:**
+
+You might have specified `The best {playlists} in {year}.` in the `gap_filler_description`, which would normally expand to `The best Classic Rock, Folk Rock & Hard Rock in 2023.`
+
+But you haven’t used an _API key_, which is needed to use `{playlists}`, so we would get `The best  in 2023.` The double space looks awful, right?
+
+`azuracast_xmltv` will automatically detect this and correct to `The best in 2023.` Much better!
+
+#### Always available
+
+- `{station_name}`
+- `{station_description}`
+- `{station_website}` — the station website URL (this is _not_ the AzuraCast URL)
+- `{player_url}` — station’s web player URL
+- `{year}` — start year of the programme
+
+#### In `requests_enabled`
+
+- `{playlist}` — playlist name
+- `{request_url}` — station’s web player URL
+
+#### In `remote`\*
+
+- `{playlist}` — playlist name
+- `{remote_url}` — remote URL used in the playlist
+
+#### In `live`
+
+- `{presenter}` — streamer/DJ name
+- `{image_url}`\* — streamer’s image URL
+- `{comments}`\* — AzuraCast’s Streamer Comments field content.  
+  _Note:_ Comments should be used with care: This field was originally meant for _internal_ remarks only, **you could leak data!**
+
+#### In `gap_filler`
+
+- `{playlists}`\* — comma-separated list of playlist names that make up the general rotation (enabled, type default, not on schedule).  
+  So if your general rotation was made up of the playlists `Classic Rock`, `Folk Rock` and `Hard Rock`, it would show `Classic Rock, Folk Rock & Hard Rock`.
+
+
+\* = This can only be used with an API key, i.e., on your own station.
+
 ## But wait… What do I _do_ with these files now?
 
 I can’t give support for the many applications that use this format, but here’s a short list of apps I have tested or know they work fine with `azuracast_xmltv`:
