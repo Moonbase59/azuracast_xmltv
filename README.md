@@ -148,15 +148,18 @@ Probably after trying out the above on a local machine, you might want to instal
    https://yourdomain.com/xmltv/yourdomain.com.xml
    ```
 
-   Instead of `yourstation`, use the _station shortcode_ you have used when setting up your station.
+   Instead of `yourstation`, use the _station shortcode_ you have used when setting up your station. This is the "URL Stub" you might have changed under _Edit Station Profile → Profile_. You can see this field only in Advanced Mode:
+   
+   ![Auswahl_284](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/08b51d0b-0a3b-4e88-a340-4abe3afc6193)
 
-10. **Congratulations!** You can now **publish the above links on your website so your listeners will know where to point their media players and where to get the EPG!**
+
+11. **Congratulations!** You can now **publish the above links on your website so your listeners will know where to point their media players and where to get the EPG!**
 
     Try it out using any media center or player I mentioned, or just do a quick test with an audio player like _Audacious_ or _VLC_.
 
     And don’t forget to **log out** from your AzuraCast `ssh` session.
 
-11. Optional fine-tuning:
+12. Optional fine-tuning:
 
     a) If your M3U shows some non-public streams and you don’t want that, use the `-p` option to only include streams that are marked _public_ in AzuraCast.
 
