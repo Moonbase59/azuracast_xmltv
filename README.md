@@ -132,7 +132,7 @@ Probably after trying out the above on a local machine, you might want to instal
 
    Save the file.
 
-   I left the `m` option in here (will create M3U files), since my mounts might change, but you can also leave it out and create the M3U manually once. I also set the `-f` option to create _filler_ program entries. Use any options you want here.
+   I left the `-m` option in here (will create M3U files), since my mounts might change, but you can also leave it out and create the M3U manually once. I also set the `-f` option to create _filler_ program entries. Use any options you want here.
 
 8. Now change into the `xmltv` folder and run `azuracast_xmltv` once to check there are no errors, and get the initial set of files. You don’t want to wait for the next automatic update—it might be almost 12 hours away… Use _the exact same command you put into the crontab_ for this, just to be sure everything works.
    
