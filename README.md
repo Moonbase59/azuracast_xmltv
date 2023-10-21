@@ -491,8 +491,9 @@ This is just a Python script, so you can open it using a text editor. (Windows u
 
 Near the beginning of the file, you’ll find many user-customizable options, most notably the program title/sub-title and description text to go with…
 - _live shows_ (streamer/DJ),
-- _syndicated content_ (remote playlists), and
-- playlists that have _listener requests_ enabled.
+- _syndicated content_ (remote playlists),
+- playlists that have _listener requests_ enabled, and
+- _gap filler_ programmes.
 
 You can also set defaults for most options here. These will be shown when `--help` is invoked.
 
