@@ -152,7 +152,7 @@ Probably after trying out the above on a local machine, you might want to instal
    
    ![Auswahl_284](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/08b51d0b-0a3b-4e88-a340-4abe3afc6193)
 
-   _Hint:_ Even if underscores `_` are shown in the example, **only use alphanumeric** characters and digits, and the hyphen `-` to comply with [RFC2838](https://www.rfc-editor.org/rfc/rfc2838.html).
+   _Hint:_ Even if underscores `_` are shown in the example, **only use alphanumeric** characters and digits, and the hyphen `-` to comply with [RFC2838](https://www.rfc-editor.org/rfc/rfc2838.html). Underscores are not allowed in a domain name.
 
 
 11. **Congratulations!** You can now **publish the above links on your website so your listeners will know where to point their media players and where to get the EPG!**
