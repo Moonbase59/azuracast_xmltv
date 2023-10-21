@@ -59,7 +59,7 @@ On Debian-like systems, you can easily install the missing modules using `pip3`.
 pip3 install lxml
 ```
 
-Then try again until all required modules are there. You have to do this only once.
+Then try again until all required modules are there. You have to do this only once. (On my Ubuntu 22.04 AzuraCast server, only the modules `lxml` and `tzlocal` were missing.)
 
 _Hint:_ If you don’t even have `pip3`, a `sudo apt install python3-pip` helps. ;-)
 
