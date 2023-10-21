@@ -129,17 +129,19 @@ Probably after trying out the above on a local machine, you might want to instal
    ```
 
    ```crontab
-   2 */12 * * * /usr/local/bin/azuracast_xmltv -o /var/azuracast/xmltv -u https://yourdomain.com -a 'your_api_key_here' -f -m > /dev/null
+   2 */12 * * * /usr/local/bin/azuracast_xmltv -o /var/azuracast/xmltv -u https://yourdomain.com -a 'your_api_key_here' -f -m -t > /dev/null
    ```
 
    Save the file.
 
    I left the `-m` option in here (will create M3U files), since my mounts might change, but you can also leave it out and create the M3U manually once. I also set the `-f` option to create _filler_ program entries. Use any options you want here.
+   
+   _Note:_ I also use the new `-t`/`--tvgurl` option here, since your files can now be found under your server’s `/xmltv/` path. This allows more modern software (like KODI) to automatically find the EPG data file (XML) belonging to the M3U.
 
 8. Now change into the `xmltv` folder and run `azuracast_xmltv` once to check there are no errors, and get the initial set of files. You don’t want to wait for the next automatic update—it might be almost 12 hours away… Use _the exact same command you put into the crontab_ for this, just to be sure everything works.
    
    ```bash
-   /usr/local/bin/azuracast_xmltv -o /var/azuracast/xmltv -u https://yourdomain.com -a 'your_api_key_here' -f -m
+   /usr/local/bin/azuracast_xmltv -o /var/azuracast/xmltv -u https://yourdomain.com -a 'your_api_key_here' -f -m -t
    ```
    Don’t forget to include the `-m` option, so it’ll create M3U files.
 
@@ -175,7 +177,7 @@ Probably after trying out the above on a local machine, you might want to instal
 From the help screen:
 ```
 usage: azuracast_xmltv [-h] [-v] [-u URL] [-i URL] [-d DAYS] [-f] [-o FOLDER]
-                       [-a APIKEY] [-p] [-m]
+                       [-a APIKEY] [-p] [-m] [-t]
 
 Create XMLTV Tuner and EPG files from an AzuraCast Web Radio.
 
@@ -196,6 +198,8 @@ options:
   -p, --public          include only public stations & streams
   -m, --m3u             create M3U XMLTV Tuner file(s); only needed on first
                         run or after changes in AzuraCast
+  -t, --tvgurl          add 'tvg-url' tags to M3U file; allows software to
+                        find the corresponding EPG automatically (see below)
 
 azuracast_xmltv can create XMLTV M3U Tuner files and XML EPG files for both
 your own and other AzuraCast stations.
@@ -207,6 +211,12 @@ and use the -a/--apikey option, which allows:
   - adding a presenter image on live shows, and (mis-)using the
     streamer comment field as a description
   - showing extra info for syndicated content (remote playlists)
+
+The -t/--tvgurl option adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner
+files. This helps media center software like KODI to automatically locate the
+corresponding EPG data file, but only works if the generated M3U and XML files
+are available under the '/xmltv' path of your AzuraCast server.
+See installation instructions at https://github.com/Moonbase59/azuracast_xmltv.
 
 Edit './azuracast_xmltv' using a text editor
 to change some defaults near the top of the file.
@@ -223,7 +233,7 @@ azuracast_xmltv -u https://demo.azuracast.com -m
 ### XMLTV Tuner file (one per station)
 XMLTV/IPTV "Tuner" files are M3U files, in a special `#EXTM3U` format.
 
-`azuracast_xmltv` names its output file after your station’s **shortname**. Ideally, this should only contain alphanumeric characters and the '-' (minus or hyphen).
+`azuracast_xmltv` names its output file after your station’s **shortcode** (called _URL Stub_ in the UI). Ideally, this should only contain alphanumeric characters and the '-' (minus or hyphen).
 
 **Sample XMLTV Tuner file `azuratest_radio.m3u`**
 
@@ -237,8 +247,16 @@ https://demo.azuracast.com/listen/azuratest_radio/mobile.mp3
 https://demo.azuracast.com/hls/azuratest_radio/live.m3u8
 ```
 
+Beginning with `azuracast_xmltv` version 0.7.0, the M3U file entries (mount points) will be _sorted_ by their display name, and the _default mount_ put at the top.
+
+This is mainly intended for players that immediately start playing when opening an M3U file (they should play the default mount first), but also helpful for humans. We just like sorted lists. ;-)
+
+More modern playout/media center software like KODI can automatically find the EPG file that corresponds to a M3U, thus reducing manual intervention and setup.
+
+Beginning with version 0.7.0, you can use the `-t`/`--tvgurl` option to enable this feature. It _requires_ that your generated M3U and XML are reachable from the Internet under your AzuraCast server’s `/xmltv/` path. See the Installation instructions on how to achieve this.
+
 ### XMLTV Electronic Program Guide (EPG) file (one per server)
-XMLTV/IPTV EPG data files are XML data files containing channel and program information. They must be compliant with the [XMLTV DTD](https://github.com/XMLTV/xmltv/blob/master/xmltv.dtd) and can be validated using the `tv_validate_file` tool, which can be installed on Debian-like systems with `sudo apt install xmltv-util`.
+XMLTV/IPTV EPG data files are XML files containing channel and program information. They must be compliant with the [XMLTV DTD](https://github.com/XMLTV/xmltv/blob/master/xmltv.dtd) and can be validated using the `tv_validate_file` tool, which can be installed on Debian-like systems with `sudo apt install xmltv-util`.
 
 This package brings some other nice utilities, just try `tv_to_text <yourstation>.xml`.
 
@@ -337,10 +355,10 @@ The above will happen when you leave the mount point _Display Name_ empty, it’
 My suggestion: Change the _Display Name_ of your station’s mount points to something meaningful that everyone can easily find and distinguish in the EPG. `azuracast_xmltv` will _automatically pick up the change_ when you run it with the `-m`/`--m3u` option next time.
 
 As an example, I used
-- Nite Radio (128kbps MP3)
 - Nite Radio (128kbps AAC)
-- Nite Radio Video-Stream
+- Nite Radio (128kbps MP3)
 - Nite Radio Testbild
+- Nite Radio Video-Stream
 
 The HLS stream (if you have one), will automatically be named `<Your Station Name> (HLS)`.
 

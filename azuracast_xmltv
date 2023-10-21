@@ -58,10 +58,20 @@
 #   - MUCH improved "{variable}" parsing, and many more that can be used
 #   - added append_to_description text that can be added to EVERY programme,
 #     can be used for legalese, or website hints.
+# 2023-10-21 - Moonbase - v0.7.0
+#   - In the M3Us, the mounts are now sorted by their display names,
+#     and the default mount put at the beginning.
+#     This is intended for players that immediately start playout (they should
+#     play the default mount). Human readability also improved by sorting.
+#   - -t/--tvurl option: generates 'url-tvg' and 'x-tvg-url' tags on #EXTM3U line,
+#     for players like KODI that can thus automatically find the corresponding EPG.
+#     Note: ONLY works when the generated M3U and XML files can be found under
+#     the '/xmltv/' path on your AzuraCast server, for example at
+#     https://example.com/xmltv/example.com.xml.
 
 # version info
 import sys
-__version_info__ = ('0', '6', '0')
+__version_info__ = ('0', '7', '0')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -208,6 +218,12 @@ num_days = 7
 # Fill gaps in a station's programmes (True/False)?
 fill_gaps = False
 
+# -t/--tvgurl option default.
+# Add 'url-tvg' and 'x-tvg-url' tags to M3U files?
+# Only makes sense if files are available under '/xmltv' on your AzuraCast server,
+# i.e. like 'https://example.com/xmltv/example.com.xml'.
+add_tvg_url = False
+
 # *** END OF USER CONFIGURABLE DEFAULTS -- DO NOT MODIFY ANYTHING BELOW ***
 
 
@@ -225,6 +241,7 @@ try:
     import datetime as dt
     from urllib.parse import urlparse
     import argparse
+    import operator
 except Exception as error:
     eprint("Error:", type(error).__name__, "–", error)
     exit(1)
@@ -342,6 +359,7 @@ def get_stations(api, channel_icon_url='', public_only=True):
                     "id": mount["id"],
                     "name": mount["display_name"],
                     "is_public": mount["is_public"],
+                    "is_default": mount["is_default"],
                     "url": mount["links"]["listen"]
                 }
                 if public_only:
@@ -393,16 +411,24 @@ def get_stations(api, channel_icon_url='', public_only=True):
                 m = {
                     "id": mount["id"],
                     "name": mount["name"],
+                    "is_default": mount["is_default"],
                     "url": mount["url"]
                 }
                 s["mounts"].append(m)
 
         if station["hls_enabled"] == True:
+            # HLS has no "is_default", we simply set it to False
             m = {
                 "name": station["name"] + " (HLS)",
-                "url": station["hls_url"]
+                "url": station["hls_url"],
+                "is_default": False
             }
             s["mounts"].append(m)
+
+        # sort mounts by display name, put default mount at beginning
+        # this is intended for players that immediately start playout,
+        # and for better human readability
+        s["mounts"] = sorted(s["mounts"], key=lambda k: (not k["is_default"], k["name"]))
 
         if public_only:
             if station["is_public"]:
@@ -413,7 +439,7 @@ def get_stations(api, channel_icon_url='', public_only=True):
     return stations
 
 
-def create_m3u(station, output_folder=''):
+def create_m3u(instance_url, station, output_folder='', add_tvg_url=False):
     """Create an M3U playlist for a single station"""
 
     # create outfile from folder + station shortname + '.m3u'
@@ -421,7 +447,13 @@ def create_m3u(station, output_folder=''):
     print(f"Writing XMLTV Tuner file (M3U playlist): {outfile}")
 
     with open(outfile, 'w') as f:
-        f.write('#EXTM3U\n')
+        if add_tvg_url:
+            # -t/-tvgurl option: add links to the EPG on the '#EXTM3U' line; MUST be reachable under /xmltv
+            tvg_url = instance_url + '/xmltv/' + urlparse(instance_url).hostname+'.xml'
+            f.write(f'#EXTM3U url-tvg="{tvg_url}" x-tvg-url="{tvg_url}"\n')
+        else:
+            # no links
+            f.write('#EXTM3U\n')
         for mount in station["mounts"]:
             f.write(
                 f'#EXTINF:-1 tvg-name="{mount["name"]}" tvg-id="{station["channel_id"]}" group-title="{station["name"]}" tvg-logo="{station["icon"]}",{mount["name"]}\n')
@@ -671,7 +703,7 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
     return programmes
 
 
-def create_xmltv(stations, programmes, output_folder=''):
+def create_xmltv(instance_url, stations, programmes, output_folder=''):
     """Create an XMLTV EPG for all stations"""
 
     # create outfile from folder + domain.name + '.xml'
@@ -776,6 +808,12 @@ and use the -a/--apikey option, which allows:
     streamer comment field as a description
   - showing extra info for syndicated content (remote playlists)
 
+The -t/--tvgurl option adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner
+files. This helps media center software like KODI to automatically locate the
+corresponding EPG data file, but only works if the generated M3U and XML files
+are available under the '/xmltv' path of your AzuraCast server.
+See installation instructions at {APPURL}.
+
 Edit '{argparse._sys.argv[0]}' using a text editor
 to change some defaults near the top of the file.
 
@@ -799,6 +837,8 @@ parser.add_argument('-p', '--public', action='store_true',
                     default=public_only, help='include only public stations & streams')
 parser.add_argument('-m', '--m3u', action='store_true', default=make_m3u,
                     help='create M3U XMLTV Tuner file(s); only needed on first run or after changes in AzuraCast')
+parser.add_argument('-t', '--tvgurl', action='store_true', default=add_tvg_url,
+                    help='add \'tvg-url\' tags to M3U file; allows software to find the corresponding EPG automatically (see below)')
 
 args = parser.parse_args()
 
@@ -810,6 +850,7 @@ make_m3u = args.m3u
 channel_icon_url = args.icon
 num_days = args.days
 fill_gaps = args.fillgaps
+add_tvg_url = args.tvgurl
 
 # Init the AzuraCast API
 api = azuracast_api(instance_url, api_key)
@@ -821,7 +862,7 @@ stations = get_stations(
 # Create M3U playlist files
 if make_m3u:
     for station in stations:
-        create_m3u(station, output_folder=output_folder)
+        create_m3u(instance_url, station, output_folder=output_folder, add_tvg_url=add_tvg_url)
 
 # Get schedules from all stations
 programmes = []
@@ -829,4 +870,4 @@ for station in stations:
     programmes.append(get_programme(api, station, num_days, fill_gaps))
 
 # Create XMLTV file
-create_xmltv(stations, programmes, output_folder=output_folder)
+create_xmltv(instance_url, stations, programmes, output_folder=output_folder)
