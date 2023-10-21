@@ -68,10 +68,15 @@
 #     Note: ONLY works when the generated M3U and XML files can be found under
 #     the '/xmltv/' path on your AzuraCast server, for example at
 #     https://example.com/xmltv/example.com.xml.
+# 2023-10-22 - Moonbase - v0.8.0
+#   - fix {remote_url} showing public player URL
+#   - add option -c/--customplayer URL to point to a customized player
+#     on a station's website instead of the AzuraCast web player
+#     when using the {player_url} or {request_url} variables.
 
 # version info
 import sys
-__version_info__ = ('0', '7', '0')
+__version_info__ = ('0', '8', '0')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -98,12 +103,12 @@ category = 'Music'
 # - {station_name}
 # - {station_description}
 # - {station_website} -- the station website URL (not the AzuraCast URL)
-# - {player_url} -- station's web player URL
+# - {player_url}** -- station's web player URL
 # - {year} start year of the programme
 #
 # In "requests_enabled"*:
 # - {playlist} -- playlist name
-# - {request_url} -- station's public player URL
+# - {request_url}** -- station's public player URL
 #
 # In "remote"*:
 # - {playlist} -- playlist name
@@ -122,7 +127,10 @@ category = 'Music'
 #   So if your general rotation was made up of the playlists
 #   'Classic Rock', 'Folk Rock' and 'Hard Rock', it would show
 #   "Classic Rock, Folk Rock & Hard Rock".
-
+#
+#  * = This can only be used with an API key, i.e., on your own station.
+# ** = Will point to AzuraCast's default web player, or a custom
+#      web player URL on the station's website if -c/--customplayer is used.
 
 # Text to add to a programme listing if listener requests are enabled
 # for this playlist. Only works with API key.
@@ -204,6 +212,12 @@ make_m3u = False
 # You can provide a channel icon, for example from the station's web page.
 # If omitted, we will use the station's Default Album Art (set in "Branding").
 channel_icon_url = ''
+
+# -c/--customplayer option default:
+# You can provide another than the standard web player URL,
+# for example a customized web player on the station's web page.
+# If omitted, we will use the station's default web player URL.
+custom_player_url = ''
 
 # -o/--output option default:
 # If you don't want files to be written into the current folder,
@@ -338,7 +352,7 @@ def get_stations(api, channel_icon_url='', public_only=True):
             "description": station["description"],
             "is_public": station["is_public"],
             "url": station["url"],
-            "public_player_url": station["public_player_url"],
+            "public_player_url": custom_player_url if custom_player_url else station["public_player_url"],
             "mounts": [],
             "playlists": [],
             "streamers": []
@@ -428,7 +442,8 @@ def get_stations(api, channel_icon_url='', public_only=True):
         # sort mounts by display name, put default mount at beginning
         # this is intended for players that immediately start playout,
         # and for better human readability
-        s["mounts"] = sorted(s["mounts"], key=lambda k: (not k["is_default"], k["name"]))
+        s["mounts"] = sorted(s["mounts"], key=lambda k: (
+            not k["is_default"], k["name"]))
 
         if public_only:
             if station["is_public"]:
@@ -449,7 +464,8 @@ def create_m3u(instance_url, station, output_folder='', add_tvg_url=False):
     with open(outfile, 'w') as f:
         if add_tvg_url:
             # -t/-tvgurl option: add links to the EPG on the '#EXTM3U' line; MUST be reachable under /xmltv
-            tvg_url = instance_url + '/xmltv/' + urlparse(instance_url).hostname+'.xml'
+            tvg_url = instance_url + '/xmltv/' + \
+                urlparse(instance_url).hostname+'.xml'
             f.write(f'#EXTM3U url-tvg="{tvg_url}" x-tvg-url="{tvg_url}"\n')
         else:
             # no links
@@ -617,7 +633,7 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                 if pl and pl["source"] == "remote_url":
                     replacers = {
                         "{playlist}": pl["name"],
-                        "{remote_url}": station["public_player_url"],
+                        "{remote_url}": pl["remote_url"],
                         "{station_name}": station["name"],
                         "{station_description}": station["description"],
                         "{station_website}": station["url"],
@@ -778,12 +794,12 @@ def my_url(arg):
     raise argparse.ArgumentTypeError('Invalid URL')
 
 
-def my_icon_url(arg):
+def my_url_path(arg):
     """Check if valid icon URL given"""
     url = urlparse(arg)
     if arg == '' or all((url.scheme, url.netloc, url.path)):
         return arg
-    raise argparse.ArgumentTypeError('Invalid icon URL')
+    raise argparse.ArgumentTypeError('Invalid URL (requires path)')
 
 
 def my_path(arg):
@@ -823,8 +839,10 @@ parser.add_argument('-v', '--version', action='version',
                     version='%(prog)s ' + __version__)
 parser.add_argument('-u', '--url', type=my_url, default=instance_url,
                     help='base URL to an AzuraCast instance')
-parser.add_argument('-i', '--icon', metavar='URL', type=my_icon_url, default=channel_icon_url,
+parser.add_argument('-i', '--icon', metavar='URL', type=my_url_path, default=channel_icon_url,
                     help='URL to a channel icon; will use station\'s default album art if omitted')
+parser.add_argument('-c', '--customplayer', metavar='URL', type=my_url_path, default=custom_player_url,
+                    help='URL to a custom web player; modifies {player_url} and {request_url} variables')
 parser.add_argument('-d', '--days', type=int, default=num_days,
                     help='number of days to include in the EPG')
 parser.add_argument('-f', '--fillgaps', action='store_true',
@@ -848,6 +866,7 @@ public_only = args.public
 output_folder = args.output + '/'
 make_m3u = args.m3u
 channel_icon_url = args.icon
+custom_player_url = args.customplayer
 num_days = args.days
 fill_gaps = args.fillgaps
 add_tvg_url = args.tvgurl
@@ -862,7 +881,8 @@ stations = get_stations(
 # Create M3U playlist files
 if make_m3u:
     for station in stations:
-        create_m3u(instance_url, station, output_folder=output_folder, add_tvg_url=add_tvg_url)
+        create_m3u(instance_url, station,
+                   output_folder=output_folder, add_tvg_url=add_tvg_url)
 
 # Get schedules from all stations
 programmes = []

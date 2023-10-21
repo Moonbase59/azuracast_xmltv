@@ -176,8 +176,8 @@ Probably after trying out the above on a local machine, you might want to instal
 
 From the help screen:
 ```
-usage: azuracast_xmltv [-h] [-v] [-u URL] [-i URL] [-d DAYS] [-f] [-o FOLDER]
-                       [-a APIKEY] [-p] [-m] [-t]
+usage: azuracast_xmltv [-h] [-v] [-u URL] [-i URL] [-c URL] [-d DAYS] [-f]
+                       [-o FOLDER] [-a APIKEY] [-p] [-m] [-t]
 
 Create XMLTV Tuner and EPG files from an AzuraCast Web Radio.
 
@@ -187,6 +187,9 @@ options:
   -u URL, --url URL     base URL to an AzuraCast instance
   -i URL, --icon URL    URL to a channel icon; will use station's default
                         album art if omitted
+  -c URL, --customplayer URL
+                        URL to a custom web player; modifies {player_url} and
+                        {request_url} variables
   -d DAYS, --days DAYS  number of days to include in the EPG
   -f, --fillgaps        fill gaps between programmes with a 'General Rotation'
                         entry
@@ -512,13 +515,13 @@ But you haven’t used an _API key_, which is needed to use `{playlists}`, so we
 - `{station_name}`
 - `{station_description}`
 - `{station_website}` — the station website URL (this is _not_ the AzuraCast URL)
-- `{player_url}` — station’s web player URL
+- `{player_url}`\*\* — station’s web player URL
 - `{year}` — start year of the programme
 
 #### In `requests_enabled`
 
 - `{playlist}` — playlist name
-- `{request_url}` — station’s web player URL
+- `{request_url}`\*\* — station’s web player URL
 
 #### In `remote`\*
 
@@ -539,6 +542,8 @@ But you haven’t used an _API key_, which is needed to use `{playlists}`, so we
 
 
 \* = This can only be used with an API key, i.e., on your own station.
+
+\*\* = URL to AzuraCast’s web player, or a custom player specified using the `-c`/`--customplayer` option. Use the latter to point listeners to a customized player on your station’s website instead of the default one.
 
 ## But wait… What do I _do_ with these files now?
 
