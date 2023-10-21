@@ -83,6 +83,86 @@ If you don’t want the success/failure mails, simply send its output to `/dev/n
 2 */12 * * * /usr/local/bin/azuracast_xmltv -u https://demo.azuracast.com > /dev/null
 ```
 
+### Install on a real AzuraCast server (Ubuntu 22.04)
+
+Probably after trying out the above on a local machine, you might want to install `azuracast_xmltv` on your real AzuraCast server. Let’s assume you run AzuraCast on a remote Ubuntu 22.04 server in a Docker container (standard install) and you wish the output files to be available under `https://yourdomain.com/xmltv` as I suggested.
+
+1. Log into your AzuraCast and create an API key for use with `azuracast_xmltv`. **Copy it somewhere safe and _keep it secret_!** After creating, **you will not be able to view the key again!**
+
+2. `ssh` into your AzuraCast server instance and become `root` (`sudo su`).
+
+3. Install `azuracast_xmltv` as shown above. Put it in `/usr/local/bin`.
+
+4. Change into the `/var/azuracast` folder and create a subfolder `xmltv`. This will later hold the files for your AzuraCast website.
+
+   ```bash
+    cd /var/azuracast
+    mkdir xmltv
+    ```
+
+5. Modify the `docker-compose.override.yml` file and add an entry for the `xmltv` folder in the `volumes` section:
+   
+   ```bash
+   nano docker-compose.override.yml
+   ```
+   
+   ```yaml
+   services:
+     web:
+       volumes:
+         - /var/azuracast/xmltv:/var/azuracast/www/web/xmltv
+   ```
+
+6. Restart your AzuraCast so it can pick up the new settings:
+
+   ```bash
+   docker-compose down
+   docker-compose up -d
+   ```
+
+7. Create a _crontab_ entry to run `azuracast_xmltv` periodically, let’s say twice a day, at 2 minutes past the hour:
+
+   ```bash
+   crontab -e
+   ```
+
+   ```crontab
+   2 */12 * * * /usr/local/bin/azuracast_xmltv -o /var/azuracast/xmltv -u https://yourdomain.com -a 'your_api_key_here' -f -m > /dev/null
+   ```
+
+   Save the file.
+
+   I left the `m` option in here (will create M3U files), since my mounts might change, but you can also leave it out and create the M3U manually once. I also set the `-f` option to create _filler_ program entries. Use any options you want here.
+
+8. Now change into the `xmltv` folder and run `azuracast_xmltv` once to check there are no errors, and get the initial set of files. You don’t want to wait for the next automatic update—it might be almost 12 hours away… Use _the exact same command you put into the crontab_ for this, just to be sure everything works.
+   
+   ```bash
+   /usr/local/bin/azuracast_xmltv -o /var/azuracast/xmltv -u https://yourdomain.com -a 'your_api_key_here' -f -m
+   ```
+   Don’t forget to include the `-m` option, so it’ll create M3U files.
+
+9. You should now be able to access the XMLTV data on your public AzuraCast website:
+   
+   ```
+   https://yourdomain.com/xmltv/yourstation.m3u
+   https://yourdomain.com/xmltv/yourdomain.com.xml
+   ```
+
+   Instead of `yourstation`, use the _station shortcode_ you have used when setting up your station.
+
+10. **Congratulations!** You can now **publish the above links on your website so your listeners will know where to point their media players and where to get the EPG!**
+
+    Try it out using any media center or player I mentioned, or just do a quick test with an audio player like _Audacious_ or _VLC_.
+
+    And don’t forget to **log out** from your AzuraCast `ssh` session.
+
+11. Optional fine-tuning:
+
+    a) If your M3U shows some non-public streams and you don’t want that, use the `-p` option to only include streams that are marked _public_ in AzuraCast.
+
+    b) You might want to edit the programme _text_ that `azuracast_xmltv` generates for the EPG listings and adapt these for your stations. The code is very well documented, just `ssh` into your server and edit it: `sudo nano /usr/local/bin/azuracast_xmltv`. The template texts near the beginning of the file are highly configurable (they use `{moustache}`-type variables) so you should be able to adapt to your needs easily.
+
+
 ## Usage
 
 From the help screen:
