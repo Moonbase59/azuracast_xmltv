@@ -87,7 +87,9 @@ If you don’t want the success/failure mails, simply send its output to `/dev/n
 
 Probably after trying out the above on a local machine, you might want to install `azuracast_xmltv` on your real AzuraCast server. Let’s assume you run AzuraCast on a remote Ubuntu 22.04 server in a Docker container (standard install) and you wish the output files to be available under `https://yourdomain.com/xmltv` as I suggested.
 
-1. Log into your AzuraCast and create an API key for use with `azuracast_xmltv`. **Copy it somewhere safe and _keep it secret_!** After creating, **you will not be able to view the key again!**
+1. Log into your AzuraCast and create an API key for use with `azuracast_xmltv`. You’ll find the function under _My Account_. **Copy the key to a safe place and _keep it secret_!** After creating, **you will not be able to view the key again!**
+
+   ![Auswahl_285](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/79d6c031-d9d7-47d5-bcd4-eb3888d2df93)
 
 2. `ssh` into your AzuraCast server instance and become `root` (`sudo su`).
 
