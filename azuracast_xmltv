@@ -77,10 +77,17 @@
 #   - minor code refactoring
 #   - fix #2 "TypeError: replace() argument 2 must be str, not None"
 #     (JSON null strings from API weren’t replaced by an empty string)
+# 2023-10-22 - Moonbase - v0.9.0
+#   - reinstate the defaults being shown in help
+#   - write formatter class for argparse, to wrap help text nicely
+#   - add limits (and check) for EPG days (1-30 days in the future)
+#   - change API schedule getter to use (undocumented) 'start' and 'end' parameters
+#   - changed unused strings default to None instead of ''. Both are Falsy.
+#   - use os.path.join() to create M3U and XML file names
 
 # version info
 import sys
-__version_info__ = ('0', '8', '1')
+__version_info__ = ('0', '9', '0')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -200,7 +207,7 @@ Visit us on {station_website}"""
 # Add an AzuraCast API key here for extended functionality
 # An API key is needed to include streams hidden from public pages,
 # like an extra video stream.
-api_key = ''
+api_key = None
 
 # -p/--public option default:
 # If 'public_only' is True, we will only list stations and mounts marked as public.
@@ -215,18 +222,18 @@ make_m3u = False
 # -i/--icon option default:
 # You can provide a channel icon, for example from the station's web page.
 # If omitted, we will use the station's Default Album Art (set in "Branding").
-channel_icon_url = ''
+channel_icon_url = None
 
 # -c/--customplayer option default:
 # You can provide another than the standard web player URL,
 # for example a customized web player on the station's web page.
 # If omitted, we will use the station's default web player URL.
-custom_player_url = ''
+custom_player_url = None
 
 # -o/--output option default:
 # If you don't want files to be written into the current folder,
-# specify an output folder here.
-output_folder = '.'
+# specify an output folder here. (Empty string, NOT None.)
+output_folder = ''
 
 # -d/--days option default:
 # EPG for how many days?
@@ -465,7 +472,7 @@ def create_m3u(instance_url, station, output_folder='', add_tvg_url=False):
     """Create an M3U playlist for a single station"""
 
     # create outfile from folder + station shortname + '.m3u'
-    outfile = output_folder+sanitize(station["shortcode"])+".m3u"
+    outfile = os.path.join(output_folder, sanitize(station["shortcode"])+".m3u")
     print(f"Writing XMLTV Tuner file (M3U playlist): {outfile}")
 
     with open(outfile, 'w') as f:
@@ -568,148 +575,151 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
 
     programmes = []
 
-    # this is currently sub-optimal: The AzuraCast API only returns data
-    # for the requested start day and the next.
-    # It would be better if we could specify the number of days instead of rows.
-    # We fake this by making several requests, one for every 2 days.
-    # We also don't care about duplicates -- the parsing is just too much,
-    # let the client sort it out.
+    # changed the old, sub-optimal API call using 'now' against this:
+    # it uses the (undocumented) 'start' end 'end' parameters
+    # of the /station/{station_id}/schedule API endpoint
 
     local_timezone = tzlocal.get_localzone()
-    rows = 100  # number of rows the API shall return, per 2 day result
 
     # start today at midnight
-    today = dt.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    start = dt.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    # end requested number of days later
+    end = start + dt.timedelta(days=num_days)
 
-    for day in range(0, num_days, 2):
-        start = today + dt.timedelta(days=day)
-        # generate utc offset with colon ourselves, using "%:z" doesn't work everywhere
-        utc_offset = start.astimezone(local_timezone).strftime("%z")
-        utc_offset = utc_offset[0:3] + ':' + utc_offset[3:]
-        start = start.astimezone(local_timezone).strftime(
-            "%Y-%m-%dT%H:%M:%S") + utc_offset
+    # generate utc offset with colon ourselves, using "%:z" doesn't work everywhere
+    utc_offset = start.astimezone(local_timezone).strftime("%z")
+    utc_offset = utc_offset[0:3] + ':' + utc_offset[3:]
+    start = start.astimezone(local_timezone).strftime(
+        "%Y-%m-%dT%H:%M:%S") + utc_offset
+    
+    # generate utc offset with colon ourselves, using "%:z" doesn't work everywhere
+    # 'end' could be after daylight savings time switching, so do it again
+    utc_offset = end.astimezone(local_timezone).strftime("%z")
+    utc_offset = utc_offset[0:3] + ':' + utc_offset[3:]
+    end = end.astimezone(local_timezone).strftime(
+        "%Y-%m-%dT%H:%M:%S") + utc_offset
 
-        params = {
-            "now": start,
-            "rows": rows
+    params = {
+        "start": start,
+        "end": end
+    }
+    r = api.get(
+        '/station/' + str(station["id"]) + '/schedule', params=params)
+    if api.fail():
+        return programmes
+
+    for r_pgm in r:
+        p = {
+            "id": r_pgm["id"],
+            "type": r_pgm["type"],
+            "channel": station["channel_id"],
+            "start": dt.datetime.strptime(r_pgm["start"], "%Y-%m-%dT%H:%M:%S%z").astimezone(local_timezone).strftime("%Y%m%d%H%M%S %z"),
+            "stop": dt.datetime.strptime(r_pgm["end"], "%Y-%m-%dT%H:%M:%S%z").astimezone(local_timezone).strftime("%Y%m%d%H%M%S %z"),
+            "title": r_pgm["title"],
+            "sub-title": "",
+            "desc": r_pgm["description"],
+            "category": category,
+            "credits": []
         }
-        r = api.get(
-            '/station/' + str(station["id"]) + '/schedule', params=params)
-        if api.fail():
-            return programmes
 
-        for r_pgm in r:
-            p = {
-                "id": r_pgm["id"],
-                "type": r_pgm["type"],
-                "channel": station["channel_id"],
-                "start": dt.datetime.strptime(r_pgm["start"], "%Y-%m-%dT%H:%M:%S%z").astimezone(local_timezone).strftime("%Y%m%d%H%M%S %z"),
-                "stop": dt.datetime.strptime(r_pgm["end"], "%Y-%m-%dT%H:%M:%S%z").astimezone(local_timezone).strftime("%Y%m%d%H%M%S %z"),
-                "title": r_pgm["title"],
-                "sub-title": "",
-                "desc": r_pgm["description"],
-                "category": category,
-                "credits": []
-            }
+        # try to enrich programme with playlist info
+        if r_pgm["type"] == "playlist":
+            # try to find the corresponding playlist by name (sadly, no ID)
+            pl = next(
+                (item for item in station["playlists"] if item["name"] == r_pgm["name"]), None)
 
-            # try to enrich programme with playlist info
-            if r_pgm["type"] == "playlist":
-                # try to find the corresponding playlist by name (sadly, no ID)
-                pl = next(
-                    (item for item in station["playlists"] if item["name"] == r_pgm["name"]), None)
+            # playlist has listener requests enabled, enrich title, sub-title, and description
+            if pl and pl["include_in_requests"]:
+                replacers = {
+                    "{playlist}": pl["name"],
+                    "{request_url}": station["public_player_url"],
+                    "{station_name}": station["name"],
+                    "{station_description}": station["description"],
+                    "{station_website}": station["url"],
+                    "{player_url}": station["public_player_url"],
+                    "{year}": r_pgm["start"][0:4]
+                }
+                p["title"] = replace_vars(
+                    replacers, requests_enabled_title)
+                p["sub-title"] = replace_vars(replacers,
+                                              requests_enabled_subtitle)
+                p["desc"] = r_pgm["description"].rstrip(
+                ) + replace_vars(replacers, requests_enabled_description)
 
-                # playlist has listener requests enabled, enrich title, sub-title, and description
-                if pl and pl["include_in_requests"]:
-                    replacers = {
-                        "{playlist}": pl["name"],
-                        "{request_url}": station["public_player_url"],
-                        "{station_name}": station["name"],
-                        "{station_description}": station["description"],
-                        "{station_website}": station["url"],
-                        "{player_url}": station["public_player_url"],
-                        "{year}": r_pgm["start"][0:4]
-                    }
-                    p["title"] = replace_vars(
-                        replacers, requests_enabled_title)
-                    p["sub-title"] = replace_vars(replacers,
-                                                  requests_enabled_subtitle)
-                    p["desc"] = r_pgm["description"].rstrip(
-                    ) + replace_vars(replacers, requests_enabled_description)
+            # playlist is syndicated content (remote)
+            if pl and pl["source"] == "remote_url":
+                replacers = {
+                    "{playlist}": pl["name"],
+                    "{remote_url}": pl["remote_url"],
+                    "{station_name}": station["name"],
+                    "{station_description}": station["description"],
+                    "{station_website}": station["url"],
+                    "{player_url}": station["public_player_url"],
+                    "{year}": r_pgm["start"][0:4]
+                }
+                p["title"] = replace_vars(replacers, remote_title)
+                p["sub-title"] = replace_vars(replacers, remote_subtitle)
+                p["desc"] = r_pgm["description"].rstrip(
+                ) + replace_vars(replacers, remote_description)
 
-                # playlist is syndicated content (remote)
-                if pl and pl["source"] == "remote_url":
-                    replacers = {
-                        "{playlist}": pl["name"],
-                        "{remote_url}": pl["remote_url"],
-                        "{station_name}": station["name"],
-                        "{station_description}": station["description"],
-                        "{station_website}": station["url"],
-                        "{player_url}": station["public_player_url"],
-                        "{year}": r_pgm["start"][0:4]
-                    }
-                    p["title"] = replace_vars(replacers, remote_title)
-                    p["sub-title"] = replace_vars(replacers, remote_subtitle)
-                    p["desc"] = r_pgm["description"].rstrip(
-                    ) + replace_vars(replacers, remote_description)
+        # try to enrich programme with streamer info
+        if r_pgm["type"] == "streamer":
+            # try to find the corresponding streamer by name (sadly, no ID)
+            dj = next(
+                (item for item in station["streamers"] if item["name"] == r_pgm["name"]), None)
 
-            # try to enrich programme with streamer info
-            if r_pgm["type"] == "streamer":
-                # try to find the corresponding streamer by name (sadly, no ID)
-                dj = next(
-                    (item for item in station["streamers"] if item["name"] == r_pgm["name"]), None)
+            if dj:
+                # found the streamer, use their info (and image)
+                replacers = {
+                    "{presenter}": dj["name"],
+                    "{image_url}": dj["art"],
+                    "{comments}": dj["comments"],
+                    "{station_name}": station["name"],
+                    "{station_description}": station["description"],
+                    "{station_website}": station["url"],
+                    "{player_url}": station["public_player_url"],
+                    "{year}": r_pgm["start"][0:4]
+                }
 
-                if dj:
-                    # found the streamer, use their info (and image)
-                    replacers = {
-                        "{presenter}": dj["name"],
-                        "{image_url}": dj["art"],
-                        "{comments}": dj["comments"],
-                        "{station_name}": station["name"],
-                        "{station_description}": station["description"],
-                        "{station_website}": station["url"],
-                        "{player_url}": station["public_player_url"],
-                        "{year}": r_pgm["start"][0:4]
-                    }
+                p["title"] = replace_vars(replacers, live_title)
+                p["sub-title"] = replace_vars(replacers, live_subtitle)
+                p["desc"] = r_pgm["description"].rstrip(
+                ) + replace_vars(replacers, live_description)
+                p["credits"].append(
+                    {"presenter": {"name": dj["name"], "image": dj["art"]}})
+            else:
+                # streamer not provided, make for some general niceness
+                replacers = {
+                    "{presenter}": r_pgm["name"],
+                    "{image_url}": '',
+                    "{comments}": '',
+                    "{station_name}": station["name"],
+                    "{station_description}": station["description"],
+                    "{station_website}": station["url"],
+                    "{player_url}": station["public_player_url"],
+                    "{year}": r_pgm["start"][0:4]
+                }
+                p["title"] = replace_vars(replacers, live_title)
+                p["sub-title"] = replace_vars(replacers, live_subtitle)
+                p["desc"] = r_pgm["description"].rstrip(
+                ) + replace_vars(replacers, live_description)
+                p["credits"].append({"presenter": {"name": r_pgm["name"]}})
 
-                    p["title"] = replace_vars(replacers, live_title)
-                    p["sub-title"] = replace_vars(replacers, live_subtitle)
-                    p["desc"] = r_pgm["description"].rstrip(
-                    ) + replace_vars(replacers, live_description)
-                    p["credits"].append(
-                        {"presenter": {"name": dj["name"], "image": dj["art"]}})
-                else:
-                    # streamer not provided, make for some general niceness
-                    replacers = {
-                        "{presenter}": r_pgm["name"],
-                        "{image_url}": '',
-                        "{comments}": '',
-                        "{station_name}": station["name"],
-                        "{station_description}": station["description"],
-                        "{station_website}": station["url"],
-                        "{player_url}": station["public_player_url"],
-                        "{year}": r_pgm["start"][0:4]
-                    }
-                    p["title"] = replace_vars(replacers, live_title)
-                    p["sub-title"] = replace_vars(replacers, live_subtitle)
-                    p["desc"] = r_pgm["description"].rstrip(
-                    ) + replace_vars(replacers, live_description)
-                    p["credits"].append({"presenter": {"name": r_pgm["name"]}})
+        # add extra info to description
+        replacers = {
+            "{station_name}": station["name"],
+            "{station_description}": station["description"],
+            "{station_website}": station["url"],
+            "{player_url}": station["public_player_url"],
+            "{year}": r_pgm["start"][0:4]
+        }
+        p["desc"] = p["desc"].rstrip() + replace_vars(replacers,
+                                                      append_to_description)
 
-            # add extra info to description
-            replacers = {
-                "{station_name}": station["name"],
-                "{station_description}": station["description"],
-                "{station_website}": station["url"],
-                "{player_url}": station["public_player_url"],
-                "{year}": r_pgm["start"][0:4]
-            }
-            p["desc"] = p["desc"].rstrip() + replace_vars(replacers,
-                                                          append_to_description)
+        # remove extra whitespace from description
+        p["desc"] = clean(p["desc"])
 
-            # remove extra whitespace from description
-            p["desc"] = clean(p["desc"])
-
-            programmes.append(p)
+        programmes.append(p)
 
     # and here starts the tedious work of removing the duplicates...
     # de-duplicate using a set (returns an unsorted list!)
@@ -730,7 +740,7 @@ def create_xmltv(instance_url, stations, programmes, output_folder=''):
     """Create an XMLTV EPG for all stations"""
 
     # create outfile from folder + domain.name + '.xml'
-    outfile = output_folder+urlparse(instance_url).hostname+'.xml'
+    outfile = os.path.join(output_folder, urlparse(instance_url).hostname+'.xml')
     print(f"Writing XMLTV EPG file: {outfile}")
 
     # set up the root
@@ -817,30 +827,52 @@ def my_path(arg):
     raise NotADirectoryError(arg)
 
 
+class Range(argparse.Action):
+    def __init__(self, minimum=None, maximum=None, *args, **kwargs):
+        self.min = minimum
+        self.max = maximum
+        #kwargs["metavar"] = "[%d-%d]" % (self.min, self.max)
+        super().__init__(*args, **kwargs)
+
+    def __call__(self, parser, namespace, value, option_string=None):
+        if not (self.min <= value <= self.max):
+            msg = 'invalid choice: %r (choose from [%d-%d])' % \
+                (value, self.min, self.max)
+            raise argparse.ArgumentError(self, msg)
+        setattr(namespace, self.dest, value)
+
+class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter):
+    """Format output like ArgumentDefaultsHelpFormatter & RawDescriptionHelpFormatter but wrap nicely"""
+
+    def _fill_text(self, text, width, indent):
+        import textwrap
+        lines = text.strip().splitlines(keepends=True)
+        new = []
+        # if 'replace_whitespace=False' is used, textwrap makes a mess
+        # we need to call it line by line
+        for line in lines:
+            new.append('\n'.join(textwrap.wrap(line, width, initial_indent=indent, subsequent_indent=indent, replace_whitespace=False)))
+        return '\n'.join(new)
+
+
 parser = argparse.ArgumentParser(description='Create XMLTV Tuner and EPG files from an AzuraCast Web Radio.',
                                  epilog=f"""
-%(prog)s can create XMLTV M3U Tuner files and XML EPG files for both
-your own and other AzuraCast stations.
+%(prog)s can create XMLTV M3U Tuner files and XML EPG files for both your own and other AzuraCast stations.
 
-For much better programme data to be generated, create an AzuraCast API key
-and use the -a/--apikey option, which allows:
+For much better programme data to be generated, create an AzuraCast API key and use the -a/--apikey option, which allows:
   - using otherwise invisible mounts, like an added video stream,
   - showing listener request info if a playlist has requests enabled
   - adding a presenter image on live shows, and (mis-)using the
     streamer comment field as a description
   - showing extra info for syndicated content (remote playlists)
 
-The -t/--tvgurl option adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner
-files. This helps media center software like KODI to automatically locate the
-corresponding EPG data file, but only works if the generated M3U and XML files
-are available under the '/xmltv' path of your AzuraCast server.
+The -t/--tvgurl option adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner files. This helps media center software like KODI to automatically locate the corresponding EPG data file, but only works if the generated M3U and XML files are available under the '/xmltv' path of your AzuraCast server.
 See installation instructions at {APPURL}.
 
-Edit '{argparse._sys.argv[0]}' using a text editor
-to change some defaults near the top of the file.
+Edit '{argparse._sys.argv[0]}' using a text editor to change some defaults near the top of the file.
 
 Please report any issues to {APPURL}/issues.""",
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)  # ArgumentDefaultsHelpFormatter
+                                 formatter_class=CustomFormatter)
 parser.add_argument('-v', '--version', action='version',
                     version='%(prog)s ' + __version__)
 parser.add_argument('-u', '--url', type=my_url, default=instance_url,
@@ -849,8 +881,8 @@ parser.add_argument('-i', '--icon', metavar='URL', type=my_url_path, default=cha
                     help='URL to a channel icon; will use station\'s default album art if omitted')
 parser.add_argument('-c', '--customplayer', metavar='URL', type=my_url_path, default=custom_player_url,
                     help='URL to a custom web player; modifies {player_url} and {request_url} variables')
-parser.add_argument('-d', '--days', type=int, default=num_days,
-                    help='number of days to include in the EPG')
+parser.add_argument('-d', '--days', type=int, minimum=1, maximum=30, action=Range, default=num_days,
+                    help='number of days in the future [%(min)d-%(max)d] to include in the EPG')
 parser.add_argument('-f', '--fillgaps', action='store_true',
                     default=fill_gaps, help='fill gaps between programmes with a \'General Rotation\' entry')
 parser.add_argument('-o', '--output', metavar='FOLDER', type=my_path,

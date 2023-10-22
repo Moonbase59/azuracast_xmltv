@@ -184,25 +184,29 @@ Create XMLTV Tuner and EPG files from an AzuraCast Web Radio.
 options:
   -h, --help            show this help message and exit
   -v, --version         show program's version number and exit
-  -u URL, --url URL     base URL to an AzuraCast instance
+  -u URL, --url URL     base URL to an AzuraCast instance (default:
+                        https://demo.azuracast.com)
   -i URL, --icon URL    URL to a channel icon; will use station's default
-                        album art if omitted
+                        album art if omitted (default: None)
   -c URL, --customplayer URL
                         URL to a custom web player; modifies {player_url} and
-                        {request_url} variables
-  -d DAYS, --days DAYS  number of days to include in the EPG
+                        {request_url} variables (default: None)
+  -d DAYS, --days DAYS  number of days in the future [1-30] to include in the
+                        EPG (default: 7)
   -f, --fillgaps        fill gaps between programmes with a 'General Rotation'
-                        entry
+                        entry (default: False)
   -o FOLDER, --output FOLDER
-                        output folder for XMLTV files
+                        output folder for XMLTV files (default: .)
   -a APIKEY, --apikey APIKEY
                         AzuraCast API key; allows creating much better EPG
-                        data, see below
-  -p, --public          include only public stations & streams
+                        data, see below (default: None)
+  -p, --public          include only public stations & streams (default:
+                        False)
   -m, --m3u             create M3U XMLTV Tuner file(s); only needed on first
-                        run or after changes in AzuraCast
+                        run or after changes in AzuraCast (default: False)
   -t, --tvgurl          add 'tvg-url' tags to M3U file; allows software to
                         find the corresponding EPG automatically (see below)
+                        (default: False)
 
 azuracast_xmltv can create XMLTV M3U Tuner files and XML EPG files for both
 your own and other AzuraCast stations.
@@ -219,12 +223,14 @@ The -t/--tvgurl option adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner
 files. This helps media center software like KODI to automatically locate the
 corresponding EPG data file, but only works if the generated M3U and XML files
 are available under the '/xmltv' path of your AzuraCast server.
-See installation instructions at https://github.com/Moonbase59/azuracast_xmltv.
+See installation instructions at
+https://github.com/Moonbase59/azuracast_xmltv.
 
-Edit './azuracast_xmltv' using a text editor
-to change some defaults near the top of the file.
+Edit './azuracast_xmltv' using a text editor to change some defaults near the
+top of the file.
 
-Please report any issues to https://github.com/Moonbase59/azuracast_xmltv/issues.
+Please report any issues to
+https://github.com/Moonbase59/azuracast_xmltv/issues.
 ```
 
 ## Sample output from the AzuraCast demo station
@@ -545,6 +551,33 @@ But you haven’t used an _API key_, which is needed to use `{playlists}`, so we
 \* = This can only be used with an API key, i.e., on your own station.
 
 \*\* = URL to AzuraCast’s web player, or a custom player specified using the `-c`/`--customplayer` option. Use the latter to point listeners to a customized player on your station’s website instead of the default one.
+
+## FAQ: Frequently Asked Questions
+
+### How do you handle different timezones?
+
+Timezones should be handled correctly: Linux servers, AzuraCast, `azuracast_xmltv`, the XMLTV EPG file standard, and the clients know about timezones.
+
+You can set your station’s timezone in AzuraCast, and `azuracast_xmltv` will simply use the timezone of the machine it runs on. Since `azuracast_xmltv` normally runs on your AzuraCast server (which should be set up correctly, ask your system administrator), all should be well.
+
+If you experience any problems (like EPG hours being offset), it is usually the client software’s fault (the EPG reading application). The files `azuracast_xmltv` generates contain the correct timezone UTC offsets as specified in the protocol.
+
+### What about daylight savings time?
+
+Both AzuraCast and `azuracast_xmltv` handle this correctly, if the server has been set up correctly.
+
+Here is an example of a programme that runs on 2023-10-29 00:00–06:00 in Germany. Now that night at 03:00 clocks in Germany will be reset to 02:00 since daylight savings time ends. The generated EPG code looks like this:
+
+```xml
+<programme start="20231029000000 +0200" stop="20231029060000 +0100" channel="niteradio.example.com">
+  <title lang="en">Nuit électronique</title>
+  <desc lang="en">Playliste: Nuit électronique</desc>
+  <credits/>
+  <category lang="en">Music</category>
+</programme>
+```
+
+As you can see, the UTC time offset at the start of the programme is `+0200`, and `+0100` at its end. A standards-compliant EPG client should be able to handle this correctly. The programme starts at 00:00 daylight savings time and ends at 06:00 normal time, making for an actual duration of 7 hours.
 
 ## But wait… What do I _do_ with these files now?
 
