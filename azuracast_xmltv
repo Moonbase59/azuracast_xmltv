@@ -84,10 +84,16 @@
 #   - change API schedule getter to use (undocumented) 'start' and 'end' parameters
 #   - changed unused strings default to None instead of ''. Both are Falsy.
 #   - use os.path.join() to create M3U and XML file names
+# 2023-10-23 - Moonbase - v0.10.0
+#   - add option -g/--gzip to create a '.gz' gzip-compressed version of the EPG
+#     in addition to the .xml file. This can drastically reduce transmission time
+#     if the client supports it (many do).
+#   - move all imports to top (no late imports anymore) so we get errors
+#     for ALL missing modules on first install.
 
 # version info
 import sys
-__version_info__ = ('0', '9', '0')
+__version_info__ = ('0', '10', '0')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -249,6 +255,11 @@ fill_gaps = False
 # i.e. like 'https://example.com/xmltv/example.com.xml'.
 add_tvg_url = False
 
+# -g/--gzip option default
+# This will create an additional gzip-compressed (.gz) version of the XML EPG file.
+# Many clients support thus format, and it speeds up transmission to the clients.
+add_gzip = True
+
 # *** END OF USER CONFIGURABLE DEFAULTS -- DO NOT MODIFY ANYTHING BELOW ***
 
 
@@ -257,6 +268,8 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
+# try importing everything upfront (no lazy late imports)
+# because we want to know which modules might be missing on first install
 try:
     import os
     import requests
@@ -266,6 +279,9 @@ try:
     import datetime as dt
     from urllib.parse import urlparse
     import argparse
+    import textwrap
+    import gzip
+    import shutil
 except Exception as error:
     eprint("Error:", type(error).__name__, "–", error)
     exit(1)
@@ -472,7 +488,8 @@ def create_m3u(instance_url, station, output_folder='', add_tvg_url=False):
     """Create an M3U playlist for a single station"""
 
     # create outfile from folder + station shortname + '.m3u'
-    outfile = os.path.join(output_folder, sanitize(station["shortcode"])+".m3u")
+    outfile = os.path.join(
+        output_folder, sanitize(station["shortcode"])+".m3u")
     print(f"Writing XMLTV Tuner file (M3U playlist): {outfile}")
 
     with open(outfile, 'w') as f:
@@ -591,7 +608,7 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
     utc_offset = utc_offset[0:3] + ':' + utc_offset[3:]
     start = start.astimezone(local_timezone).strftime(
         "%Y-%m-%dT%H:%M:%S") + utc_offset
-    
+
     # generate utc offset with colon ourselves, using "%:z" doesn't work everywhere
     # 'end' could be after daylight savings time switching, so do it again
     utc_offset = end.astimezone(local_timezone).strftime("%z")
@@ -736,11 +753,12 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
     return programmes
 
 
-def create_xmltv(instance_url, stations, programmes, output_folder=''):
+def create_xmltv(instance_url, stations, programmes, output_folder='', add_gzip=False):
     """Create an XMLTV EPG for all stations"""
 
     # create outfile from folder + domain.name + '.xml'
-    outfile = os.path.join(output_folder, urlparse(instance_url).hostname+'.xml')
+    outfile = os.path.join(output_folder, urlparse(
+        instance_url).hostname+'.xml')
     print(f"Writing XMLTV EPG file: {outfile}")
 
     # set up the root
@@ -800,6 +818,17 @@ def create_xmltv(instance_url, stations, programmes, output_folder=''):
         xf.write_doctype('<!DOCTYPE tv SYSTEM "xmltv.dtd">')
         xf.write(root, pretty_print=True)
 
+    # create gzip-compressed (.gz) file if requested
+    if add_gzip:
+        infile = os.path.join(output_folder, urlparse(
+            instance_url).hostname+'.xml')
+        outfile = infile + '.gz'
+        print(f"Writing XMLTV EPG gzip file: {outfile}")
+
+        with open(infile, 'rb') as f_in:
+            with gzip.open(outfile, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+
 
 # some tests for arparse
 
@@ -831,7 +860,7 @@ class Range(argparse.Action):
     def __init__(self, minimum=None, maximum=None, *args, **kwargs):
         self.min = minimum
         self.max = maximum
-        #kwargs["metavar"] = "[%d-%d]" % (self.min, self.max)
+        # kwargs["metavar"] = "[%d-%d]" % (self.min, self.max)
         super().__init__(*args, **kwargs)
 
     def __call__(self, parser, namespace, value, option_string=None):
@@ -841,17 +870,18 @@ class Range(argparse.Action):
             raise argparse.ArgumentError(self, msg)
         setattr(namespace, self.dest, value)
 
+
 class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter):
     """Format output like ArgumentDefaultsHelpFormatter & RawDescriptionHelpFormatter but wrap nicely"""
 
     def _fill_text(self, text, width, indent):
-        import textwrap
         lines = text.strip().splitlines(keepends=True)
         new = []
         # if 'replace_whitespace=False' is used, textwrap makes a mess
         # we need to call it line by line
         for line in lines:
-            new.append('\n'.join(textwrap.wrap(line, width, initial_indent=indent, subsequent_indent=indent, replace_whitespace=False)))
+            new.append('\n'.join(textwrap.wrap(line, width, initial_indent=indent,
+                       subsequent_indent=indent, replace_whitespace=False)))
         return '\n'.join(new)
 
 
@@ -895,6 +925,8 @@ parser.add_argument('-m', '--m3u', action='store_true', default=make_m3u,
                     help='create M3U XMLTV Tuner file(s); only needed on first run or after changes in AzuraCast')
 parser.add_argument('-t', '--tvgurl', action='store_true', default=add_tvg_url,
                     help='add \'tvg-url\' tags to M3U file; allows software to find the corresponding EPG automatically (see below)')
+parser.add_argument('-g', '--gzip', action='store_true', default=add_gzip,
+                    help='additionally output a gzip-compressed (.gz) version of the EPG XML file; many clients can use this format, and it reduces transmission time and bandwidth')
 
 args = parser.parse_args()
 
@@ -908,6 +940,7 @@ custom_player_url = args.customplayer
 num_days = args.days
 fill_gaps = args.fillgaps
 add_tvg_url = args.tvgurl
+add_gzip = args.gzip
 
 # Init the AzuraCast API
 api = azuracast_api(instance_url, api_key)
@@ -927,5 +960,6 @@ programmes = []
 for station in stations:
     programmes.append(get_programme(api, station, num_days, fill_gaps))
 
-# Create XMLTV file
-create_xmltv(instance_url, stations, programmes, output_folder=output_folder)
+# Create XMLTV file, add gzipped .gz version if requested
+create_xmltv(instance_url, stations, programmes,
+             output_folder=output_folder, add_gzip=add_gzip)

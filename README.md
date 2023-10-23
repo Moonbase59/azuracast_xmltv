@@ -141,7 +141,7 @@ Probably after trying out the above on a local machine, you might want to instal
 8. Now change into the `xmltv` folder and run `azuracast_xmltv` once to check there are no errors, and get the initial set of files. You don’t want to wait for the next automatic update—it might be almost 12 hours away… Use _the exact same command you put into the crontab_ for this, just to be sure everything works.
    
    ```bash
-   /usr/local/bin/azuracast_xmltv -o /var/azuracast/xmltv -u https://yourdomain.com -a 'your_api_key_here' -f -m -t
+   /usr/local/bin/azuracast_xmltv -o /var/azuracast/xmltv -u https://yourdomain.com -a 'your_api_key_here' -f -m -t -g
    ```
    Don’t forget to include the `-m` option, so it’ll create M3U files.
 
@@ -150,6 +150,7 @@ Probably after trying out the above on a local machine, you might want to instal
    ```
    https://yourdomain.com/xmltv/yourstation.m3u
    https://yourdomain.com/xmltv/yourdomain.com.xml
+   https://yourdomain.com/xmltv/yourdomain.com.xml.gz
    ```
 
    Instead of `yourstation`, use the _station shortcode_ you have used when setting up your station. This is the "URL Stub" you might have changed under _Edit Station Profile → Profile_. You can see this field only in Advanced Mode:
@@ -162,6 +163,8 @@ Probably after trying out the above on a local machine, you might want to instal
 11. **Congratulations!** You can now **publish the above links on your website so your listeners will know where to point their media players and where to get the EPG!**
 
     Try it out using any media center or player I mentioned, or just do a quick test with an audio player like _Audacious_ or _VLC_.
+    
+    If your client supports the compressed gzip-format (.gz) for the EPG, you should use it. It reduces transmission time and bandwidth.
 
     And don’t forget to **log out** from your AzuraCast `ssh` session.
 
@@ -177,7 +180,7 @@ Probably after trying out the above on a local machine, you might want to instal
 From the help screen:
 ```
 usage: azuracast_xmltv [-h] [-v] [-u URL] [-i URL] [-c URL] [-d DAYS] [-f]
-                       [-o FOLDER] [-a APIKEY] [-p] [-m] [-t]
+                       [-o FOLDER] [-a APIKEY] [-p] [-m] [-t] [-g]
 
 Create XMLTV Tuner and EPG files from an AzuraCast Web Radio.
 
@@ -196,7 +199,7 @@ options:
   -f, --fillgaps        fill gaps between programmes with a 'General Rotation'
                         entry (default: False)
   -o FOLDER, --output FOLDER
-                        output folder for XMLTV files (default: .)
+                        output folder for XMLTV files (default: )
   -a APIKEY, --apikey APIKEY
                         AzuraCast API key; allows creating much better EPG
                         data, see below (default: None)
@@ -207,6 +210,10 @@ options:
   -t, --tvgurl          add 'tvg-url' tags to M3U file; allows software to
                         find the corresponding EPG automatically (see below)
                         (default: False)
+  -g, --gzip            additionally output a gzip-compressed (.gz) version of
+                        the EPG XML file; many clients can use this format,
+                        and it reduces transmission time and bandwidth
+                        (default: True)
 
 azuracast_xmltv can create XMLTV M3U Tuner files and XML EPG files for both
 your own and other AzuraCast stations.
@@ -578,6 +585,19 @@ Here is an example of a programme that runs on 2023-10-29 00:00–06:00 in Germa
 ```
 
 As you can see, the UTC time offset at the start of the programme is `+0200`, and `+0100` at its end. A standards-compliant EPG client should be able to handle this correctly. The programme starts at 00:00 daylight savings time and ends at 06:00 normal time, making for an actual duration of 7 hours.
+
+### What about the gzip-compressed `.gz` file?
+
+#### Should I use it?
+
+Absolutely. Many clients like _KODI_ and _xTeVe_ support reading this format. Since files are _much_ smaller, it decreases transmission time and bandwidth drastically.
+
+#### Why provide _both_ `.xml` and `.xml.gz`?
+
+Some clients don’t yet support the modern, compressed version of the EPG. Offer both and let the client decide which to use.
+
+This is also the reason why the `url-tvg` and `x-tvg-url` entries in the M3U file (if you use the `-t`/`--tvgurl` option) point to the `.xml` version of the file, _not_ to the gzipped version.
+
 
 ## But wait… What do I _do_ with these files now?
 
