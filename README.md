@@ -13,6 +13,7 @@ Therefore I recommend regenerating the files periodically and **linking to them 
 Unfortunately, there isn’t a "standard" location for this yet. Maybe we should all start using `https://domain.tld/xmltv` for that, and
 - put an `index.html` (or other) file there that lists the available links in human-readable form,
 - use this as a base location for the `m3u` and `xml` files (i.e., get your station data by pointing to `https://domain.tld/xmltv/station.m3u` and get the EPG by pointing to `https://domain.tld/xmltv/domain.tld.xml`).
+- from version 0.10.0 on, a gzip-compressed version can be made available at `https://domain.tld/xmltv/domain.tld.xml.gz`.
 
 It would make things so much easier for server operators and listeners alike.
 
