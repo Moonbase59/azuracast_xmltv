@@ -388,6 +388,16 @@ As an example, I used
 
 The HLS stream (if you have one), will automatically be named `<Your Station Name> (HLS)`.
 
+### Distinguishing audio and video streams
+
+Some media center software (like _KODI_) can distinguish between "Radio" and "TV" and puts streams under "Radio" and "TV" menus, respectively. The distinction is made by a flag `radio="true"`on the M3U `#EXTINF` lines.
+
+From version 0.11.0, `azuracast_xmltv` fully supports this feature if the `-r`/`--radio` option is used (default).
+
+`azuracast_xmltv` will look for a list of keywords in your stream name, and flag it a video stream if any of the following keywords are found in the stream display name: 'Video', 'TV', 'Testbild', 'mpeg', 'mpg', 'm2t', 'm2ts', 'ts'. The comparison in done case-insensitively, also expanding some language-specific characters, like the German "ß" to "ss".
+
+You can edit the default keyword list near the beginning of the file. It is called `videostream_keywords`.
+
 ## Fill the gaps between scheduled shows
 
 You don’t have many scheduled shows but a 24/7 station and **want to show that something is playing** in the EPG?
