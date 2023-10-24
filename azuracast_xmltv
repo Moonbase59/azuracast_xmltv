@@ -90,10 +90,15 @@
 #     if the client supports it (many do).
 #   - move all imports to top (no late imports anymore) so we get errors
 #     for ALL missing modules on first install.
+# 2023-10-24 - Moonbase - v0.11.0
+#   - add option -r/--radio to add a 'radio="true"' tag in M3U #EXTINF
+#     for streams whose display name DOESN’T contain certain "video" keywords
+#     This is for media centers like KODI that can separate Radio & TV streams
+#     (if 'radio' is true, the stream will appear in  the "Radio" menu, not "TV")
 
 # version info
 import sys
-__version_info__ = ('0', '10', '0')
+__version_info__ = ('0', '11', '0')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -260,6 +265,22 @@ add_tvg_url = False
 # Many clients support thus format, and it speeds up transmission to the clients.
 add_gzip = True
 
+# -r/--radio option default
+# Add a 'radio="true"' tag in the M3U’s #EXTINF line for streams
+# whose display name doesn’t contain the word "video".
+# This is for media centers like KODI that can separate Radio & TV streams
+# (if 'radio' is true, the stream will appear in  the "Radio" menu, not "TV")
+add_radio_tag = True
+# list of words in stream display name
+# that will EXCLUDE a stream from getting the 'radio="true"' #EXTINF tag.
+# Comparison is done in "casefold" mode, i.e. case-insensitively,
+# with characters like the German "ß" expanded to "ss".
+# Example:
+#   "Nite Radio (128kbps MP3)" will be listed as "Radio" in KODI
+#   "Nite Radio Video Stream" will be listed as "TV" in KODI
+# Including the file extensions is for people that don't change default stream names.
+videostream_keywords = ['Video', 'TV', 'Testbild', 'mpeg', 'mpg', 'm2t', 'm2ts', 'ts']
+
 # *** END OF USER CONFIGURABLE DEFAULTS -- DO NOT MODIFY ANYTHING BELOW ***
 
 
@@ -282,6 +303,7 @@ try:
     import textwrap
     import gzip
     import shutil
+    import re
 except Exception as error:
     eprint("Error:", type(error).__name__, "–", error)
     exit(1)
@@ -357,7 +379,23 @@ def replace_vars(dictionary, text):
     return text
 
 
-def get_stations(api, channel_icon_url='', public_only=True):
+def is_video(name, keywords):
+    """Try to determine if a stream is a video stream by using a list of keywords"""
+
+    # casefold keywords for comparison, just in case
+    keywords = [k.casefold() for k in keywords]
+
+    is_video = False
+
+    # see if any of the words in the stream name match a "video stream" keyword
+    words = re.findall('(\w+)', name.casefold())
+    for word in words:
+        if word in keywords:
+            is_video = True
+    return is_video
+
+
+def get_stations(api, channel_icon_url='', public_only=True, videostream_keywords=[]):
     """Get station info from this instance"""
     stations = []
 
@@ -404,6 +442,7 @@ def get_stations(api, channel_icon_url='', public_only=True):
                     "name": mount["display_name"],
                     "is_public": mount["is_public"],
                     "is_default": mount["is_default"],
+                    "is_video": is_video(mount["display_name"], videostream_keywords),
                     "url": mount["links"]["listen"]
                 }
                 if public_only:
@@ -456,6 +495,7 @@ def get_stations(api, channel_icon_url='', public_only=True):
                     "id": mount["id"],
                     "name": mount["name"],
                     "is_default": mount["is_default"],
+                    "is_video": is_video(mount["name"], videostream_keywords),
                     "url": mount["url"]
                 }
                 s["mounts"].append(m)
@@ -465,7 +505,8 @@ def get_stations(api, channel_icon_url='', public_only=True):
             m = {
                 "name": station["name"] + " (HLS)",
                 "url": station["hls_url"],
-                "is_default": False
+                "is_default": False,
+                "is_video": False
             }
             s["mounts"].append(m)
 
@@ -484,7 +525,7 @@ def get_stations(api, channel_icon_url='', public_only=True):
     return stations
 
 
-def create_m3u(instance_url, station, output_folder='', add_tvg_url=False):
+def create_m3u(instance_url, station, output_folder='', add_tvg_url=False, add_radio_tag=False):
     """Create an M3U playlist for a single station"""
 
     # create outfile from folder + station shortname + '.m3u'
@@ -502,8 +543,9 @@ def create_m3u(instance_url, station, output_folder='', add_tvg_url=False):
             # no links
             f.write('#EXTM3U\n')
         for mount in station["mounts"]:
+            radio_tag = 'radio="true" ' if add_radio_tag and not mount["is_video"] else ''
             f.write(
-                f'#EXTINF:-1 tvg-name="{mount["name"]}" tvg-id="{station["channel_id"]}" group-title="{station["name"]}" tvg-logo="{station["icon"]}",{mount["name"]}\n')
+                f'#EXTINF:-1 tvg-name="{mount["name"]}" tvg-id="{station["channel_id"]}" group-title="{station["name"]}" {radio_tag}tvg-logo="{station["icon"]}",{mount["name"]}\n')
             f.write(mount['url']+'\n')
 
 
@@ -899,6 +941,9 @@ For much better programme data to be generated, create an AzuraCast API key and 
 The -t/--tvgurl option adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner files. This helps media center software like KODI to automatically locate the corresponding EPG data file, but only works if the generated M3U and XML files are available under the '/xmltv' path of your AzuraCast server.
 See installation instructions at {APPURL}.
 
+The -r/--radio option adds a 'radio="true"' tag to the M3U #EXTINF lines, if a stream’s display name doesn’t contain any of the words {', '.join("'"+k+"'" for k in videostream_keywords)} (you can customize this list).
+This is for software like KODI, which can distinguish between Radio and TV channels and displays these in separate menus.
+
 Edit '{argparse._sys.argv[0]}' using a text editor to change some defaults near the top of the file.
 
 Please report any issues to {APPURL}/issues.""",
@@ -923,6 +968,8 @@ parser.add_argument('-p', '--public', action='store_true',
                     default=public_only, help='include only public stations & streams')
 parser.add_argument('-m', '--m3u', action='store_true', default=make_m3u,
                     help='create M3U XMLTV Tuner file(s); only needed on first run or after changes in AzuraCast')
+parser.add_argument('-r', '--radio', action='store_true', default=add_radio_tag,
+                    help='add \'radio="true"\' tags to M3U #EXTINF; allows distinction between radio and TV channels (see below)')
 parser.add_argument('-t', '--tvgurl', action='store_true', default=add_tvg_url,
                     help='add \'tvg-url\' tags to M3U file; allows software to find the corresponding EPG automatically (see below)')
 parser.add_argument('-g', '--gzip', action='store_true', default=add_gzip,
@@ -939,6 +986,7 @@ channel_icon_url = args.icon
 custom_player_url = args.customplayer
 num_days = args.days
 fill_gaps = args.fillgaps
+add_radio_tag = args.radio
 add_tvg_url = args.tvgurl
 add_gzip = args.gzip
 
@@ -947,13 +995,13 @@ api = azuracast_api(instance_url, api_key)
 
 # Get stations from this AzuraCast instance
 stations = get_stations(
-    api, channel_icon_url=channel_icon_url, public_only=public_only)
+    api, channel_icon_url=channel_icon_url, public_only=public_only, videostream_keywords=videostream_keywords)
 
 # Create M3U playlist files
 if make_m3u:
     for station in stations:
         create_m3u(instance_url, station,
-                   output_folder=output_folder, add_tvg_url=add_tvg_url)
+                   output_folder=output_folder, add_tvg_url=add_tvg_url, add_radio_tag=add_radio_tag)
 
 # Get schedules from all stations
 programmes = []

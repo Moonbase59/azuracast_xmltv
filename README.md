@@ -181,7 +181,7 @@ Probably after trying out the above on a local machine, you might want to instal
 From the help screen:
 ```
 usage: azuracast_xmltv [-h] [-v] [-u URL] [-i URL] [-c URL] [-d DAYS] [-f]
-                       [-o FOLDER] [-a APIKEY] [-p] [-m] [-t] [-g]
+                       [-o FOLDER] [-a APIKEY] [-p] [-m] [-r] [-t] [-g]
 
 Create XMLTV Tuner and EPG files from an AzuraCast Web Radio.
 
@@ -208,6 +208,9 @@ options:
                         False)
   -m, --m3u             create M3U XMLTV Tuner file(s); only needed on first
                         run or after changes in AzuraCast (default: False)
+  -r, --radio           add 'radio="true"' tags to M3U #EXTINF; allows
+                        distinction between radio and TV channels (see below)
+                        (default: True)
   -t, --tvgurl          add 'tvg-url' tags to M3U file; allows software to
                         find the corresponding EPG automatically (see below)
                         (default: False)
@@ -233,6 +236,12 @@ corresponding EPG data file, but only works if the generated M3U and XML files
 are available under the '/xmltv' path of your AzuraCast server.
 See installation instructions at
 https://github.com/Moonbase59/azuracast_xmltv.
+
+The -r/--radio option adds a 'radio="true"' tag to the M3U #EXTINF lines, if a
+stream’s display name doesn’t contain any of the words 'Video', 'TV',
+'Testbild', 'mpeg', 'mpg', 'm2t', 'm2ts', 'ts' (you can customize this list).
+This is for software like KODI, which can distinguish between Radio and TV
+channels and displays these in separate menus.
 
 Edit './azuracast_xmltv' using a text editor to change some defaults near the
 top of the file.
