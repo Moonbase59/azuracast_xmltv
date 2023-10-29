@@ -407,7 +407,7 @@ The RSS feed looks good even in the most basic feed reader. A click on the title
 ![Liferea_001](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/fff3ad14-da01-4104-b94a-4bb66eaa80c8)  
 _Station RSS Feed as seen by Liferea (a famous Linux feed reader)_
 
-![Liferea_002](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/5b13b205-851b-451b-a18f-204047110882)  
+![Liferea_002](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/e05bd58d-a684-470d-ad37-0228eabfc951)  
 _You can even use the web player within some feed readers_
 
 The RSS 2.0 Feeds we generate are _standards-compliant_ and usually _validate_ just fine. Some validators have problems with feed items lying in the future, that can safely be ignored.
