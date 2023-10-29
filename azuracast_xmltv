@@ -95,10 +95,15 @@
 #     for streams whose display name DOESN’T contain certain "video" keywords
 #     This is for media centers like KODI that can separate Radio & TV streams
 #     (if 'radio' is true, the stream will appear in  the "Radio" menu, not "TV")
+# 2023-10-29 - Moonbase - v0.12.0
+#   - add option --rss, an experimental RSS 2.0 Feed generator
+#     (creates one file per station, well cacheable, "station_shortcode.rss")
+#     Makes sense only when also served from the "/xmltv" server path.
+#   - use correct (global) language attribute in XMLTV XML files and RSS
 
 # version info
 import sys
-__version_info__ = ('0', '11', '0')
+__version_info__ = ('0', '12', '0')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -114,6 +119,10 @@ APPURL = "https://github.com/Moonbase59/azuracast_xmltv"
 # so you might get a CloudFlare Error 521. Just try again a few minutes later.
 instance_url = 'https://demo.azuracast.com'
 
+# language used for content description in EPG & RSS
+# us a language code permitted by the W3C for use in HTML
+language = "en"
+
 # EPG programme category to list (i.e. "Music", "Talk", ...)
 category = 'Music'
 
@@ -126,7 +135,8 @@ category = 'Music'
 # - {station_description}
 # - {station_website} -- the station website URL (not the AzuraCast URL)
 # - {player_url}** -- station's web player URL
-# - {year} start year of the programme
+# - {year} -- start year of the programme
+# - {category} -- (global) category ("Music")
 #
 # In "requests_enabled"*:
 # - {playlist} -- playlist name
@@ -149,6 +159,9 @@ category = 'Music'
 #   So if your general rotation was made up of the playlists
 #   'Classic Rock', 'Folk Rock' and 'Hard Rock', it would show
 #   "Classic Rock, Folk Rock & Hard Rock".
+#
+# In "rss_feed":
+# -
 #
 #  * = This can only be used with an API key, i.e., on your own station.
 # ** = Will point to AzuraCast's default web player, or a custom
@@ -213,6 +226,22 @@ append_to_description = """
 
 Program Copyright © {year} {station_name} — {station_description}
 Visit us on {station_website}"""
+
+# RSS Feed description, HTML allowed here
+# Note some feed readers strip many HTML elements, so TEST.
+# - {title} -- programme title
+# - {subtitle} -- programme sub-title
+# - {airdate} -- date of programme start "YYYY-MM-DD"
+# - {airtime} -- programme start & end time "HH:MM–HH:MM"
+# - {airtime_length} -- programme length "HH:MM"
+# - {category} -- global category ("Music")
+# - {desc} -- original programme description, generated from above elements
+#   newlines in {desc} will automatically be converted to <br/>
+rss_feed_description = """<h2>{title}</h2>
+<h3>{subtitle}</h3>
+<p><strong>{airdate}&emsp;{airtime}</strong> ({airtime_length})&emsp;{station_name} ({category})</p>
+<p>{desc}</p>"""
+
 
 # -a/--apikey option default:
 # Add an AzuraCast API key here for extended functionality
@@ -279,7 +308,14 @@ add_radio_tag = True
 #   "Nite Radio (128kbps MP3)" will be listed as "Radio" in KODI
 #   "Nite Radio Video Stream" will be listed as "TV" in KODI
 # Including the file extensions is for people that don't change default stream names.
-videostream_keywords = ['Video', 'TV', 'Testbild', 'mpeg', 'mpg', 'm2t', 'm2ts', 'ts']
+videostream_keywords = ['Video', 'TV', 'Testbild',
+                        'mpeg', 'mpg', 'm2t', 'm2ts', 'ts']
+
+# --rss option default:
+# Create/update RSS Feeds (one per station plus an aggregated one for ALL stations)
+# Only makes sense if files are available under '/xmltv' on your AzuraCast server,
+# i.e. like 'https://example.com/xmltv/example.com.rss'.
+make_rss = False
 
 # *** END OF USER CONFIGURABLE DEFAULTS -- DO NOT MODIFY ANYTHING BELOW ***
 
@@ -296,7 +332,7 @@ try:
     import requests
     import json
     import lxml.etree as et
-    import tzlocal
+#    import tzlocal
     import datetime as dt
     from urllib.parse import urlparse
     import argparse
@@ -304,6 +340,7 @@ try:
     import gzip
     import shutil
     import re
+    from email import utils  # for RSS Feed dates
 except Exception as error:
     eprint("Error:", type(error).__name__, "–", error)
     exit(1)
@@ -579,7 +616,8 @@ def create_gap_fillers(station, programmes):
         "{station_name}": station["name"],
         "{station_description}": station["description"],
         "{station_website}": station["url"],
-        "{player_url}": station["public_player_url"]
+        "{player_url}": station["public_player_url"],
+        "{category}": category  # global
     }
 
     gaps = []
@@ -638,24 +676,22 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
     # it uses the (undocumented) 'start' end 'end' parameters
     # of the /station/{station_id}/schedule API endpoint
 
-    local_timezone = tzlocal.get_localzone()
-
     # start today at midnight
     start = dt.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     # end requested number of days later
     end = start + dt.timedelta(days=num_days)
 
     # generate utc offset with colon ourselves, using "%:z" doesn't work everywhere
-    utc_offset = start.astimezone(local_timezone).strftime("%z")
+    utc_offset = start.astimezone().strftime("%z")
     utc_offset = utc_offset[0:3] + ':' + utc_offset[3:]
-    start = start.astimezone(local_timezone).strftime(
+    start = start.astimezone().strftime(
         "%Y-%m-%dT%H:%M:%S") + utc_offset
 
     # generate utc offset with colon ourselves, using "%:z" doesn't work everywhere
     # 'end' could be after daylight savings time switching, so do it again
-    utc_offset = end.astimezone(local_timezone).strftime("%z")
+    utc_offset = end.astimezone().strftime("%z")
     utc_offset = utc_offset[0:3] + ':' + utc_offset[3:]
-    end = end.astimezone(local_timezone).strftime(
+    end = end.astimezone().strftime(
         "%Y-%m-%dT%H:%M:%S") + utc_offset
 
     params = {
@@ -672,8 +708,8 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
             "id": r_pgm["id"],
             "type": r_pgm["type"],
             "channel": station["channel_id"],
-            "start": dt.datetime.strptime(r_pgm["start"], "%Y-%m-%dT%H:%M:%S%z").astimezone(local_timezone).strftime("%Y%m%d%H%M%S %z"),
-            "stop": dt.datetime.strptime(r_pgm["end"], "%Y-%m-%dT%H:%M:%S%z").astimezone(local_timezone).strftime("%Y%m%d%H%M%S %z"),
+            "start": dt.datetime.strptime(r_pgm["start"], "%Y-%m-%dT%H:%M:%S%z").astimezone().strftime("%Y%m%d%H%M%S %z"),
+            "stop": dt.datetime.strptime(r_pgm["end"], "%Y-%m-%dT%H:%M:%S%z").astimezone().strftime("%Y%m%d%H%M%S %z"),
             "title": r_pgm["title"],
             "sub-title": "",
             "desc": r_pgm["description"],
@@ -696,7 +732,8 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                     "{station_description}": station["description"],
                     "{station_website}": station["url"],
                     "{player_url}": station["public_player_url"],
-                    "{year}": r_pgm["start"][0:4]
+                    "{year}": r_pgm["start"][0:4],
+                    "{category}": category  # global
                 }
                 p["title"] = replace_vars(
                     replacers, requests_enabled_title)
@@ -714,7 +751,8 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                     "{station_description}": station["description"],
                     "{station_website}": station["url"],
                     "{player_url}": station["public_player_url"],
-                    "{year}": r_pgm["start"][0:4]
+                    "{year}": r_pgm["start"][0:4],
+                    "{category}": category  # global
                 }
                 p["title"] = replace_vars(replacers, remote_title)
                 p["sub-title"] = replace_vars(replacers, remote_subtitle)
@@ -737,7 +775,8 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                     "{station_description}": station["description"],
                     "{station_website}": station["url"],
                     "{player_url}": station["public_player_url"],
-                    "{year}": r_pgm["start"][0:4]
+                    "{year}": r_pgm["start"][0:4],
+                    "{category}": category  # global
                 }
 
                 p["title"] = replace_vars(replacers, live_title)
@@ -756,7 +795,8 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                     "{station_description}": station["description"],
                     "{station_website}": station["url"],
                     "{player_url}": station["public_player_url"],
-                    "{year}": r_pgm["start"][0:4]
+                    "{year}": r_pgm["start"][0:4],
+                    "{category}": category  # global
                 }
                 p["title"] = replace_vars(replacers, live_title)
                 p["sub-title"] = replace_vars(replacers, live_subtitle)
@@ -770,7 +810,8 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
             "{station_description}": station["description"],
             "{station_website}": station["url"],
             "{player_url}": station["public_player_url"],
-            "{year}": r_pgm["start"][0:4]
+            "{year}": r_pgm["start"][0:4],
+            "{category}": category  # global
         }
         p["desc"] = p["desc"].rstrip() + replace_vars(replacers,
                                                       append_to_description)
@@ -804,8 +845,7 @@ def create_xmltv(instance_url, stations, programmes, output_folder='', add_gzip=
     print(f"Writing XMLTV EPG file: {outfile}")
 
     # set up the root
-    local_timezone = tzlocal.get_localzone()
-    date = dt.datetime.now().astimezone(local_timezone).strftime("%Y%m%d%H%M%S %z")
+    date = dt.datetime.now().astimezone().strftime("%Y%m%d%H%M%S %z")
 
     root = et.Element("tv",
                       attrib={"date": date,
@@ -826,7 +866,7 @@ def create_xmltv(instance_url, stations, programmes, output_folder='', add_gzip=
     # set up programs
     for s_pgm in programmes:
         for r_pgm in s_pgm:
-            attrib_lang = {"lang": "en"}
+            attrib_lang = {"lang": language}
             programme_attrib = dict(
                 start=r_pgm["start"],
                 stop=r_pgm["stop"],
@@ -870,6 +910,163 @@ def create_xmltv(instance_url, stations, programmes, output_folder='', add_gzip=
         with open(infile, 'rb') as f_in:
             with gzip.open(outfile, 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
+
+
+def create_rss_station(instance_url, station, programmes, output_folder=''):
+    """Create an RSS Feed for a single station"""
+
+    # create outfile from folder + station shortname + '.rss'
+    outfile = os.path.join(
+        output_folder, sanitize(station["shortcode"])+".rss")
+    print(f"Writing RSS Feed file: {outfile}")
+
+    # set up the root
+    created_on = utils.formatdate(localtime=True)  # RFC2822 format
+    year = dt.datetime.now().strftime("%Y")  # copyright year
+    copyright_text = f"Copyright © {year} {station['name']}"
+
+    # et.register_namespace("atom", "http://www.w3.org/2005/Atom")
+    nsmap = {
+        "atom": "http://www.w3.org/2005/Atom",
+        "media": "http://search.yahoo.com/mrss/"
+    }
+    root = et.Element("rss", attrib={"version": "2.0"}, nsmap=nsmap)
+
+    # set up the channel
+    channel = et.SubElement(root, "channel")
+
+    self_url = instance_url + '/xmltv/' + \
+        sanitize(station["shortcode"]) + ".rss"
+    et.SubElement(channel, "{http://www.w3.org/2005/Atom}link", attrib={
+        "href": self_url,
+        "rel": "self",
+        "type": "application/rss+xml"})
+
+    et.SubElement(channel, "title").text = station["name"]
+    et.SubElement(channel, "link").text = station["url"]
+    et.SubElement(channel, "description").text = station["description"]
+
+    et.SubElement(channel, "language").text = language
+    et.SubElement(channel, "pubDate").text = created_on
+    et.SubElement(channel, "lastBuildDate").text = created_on
+    et.SubElement(channel, "generator").text = f"{APPNAME} {VERSION}"
+    et.SubElement(channel, "copyright").text = copyright_text
+
+    if station["icon"]:
+        image = et.SubElement(channel, "image")
+        et.SubElement(image, "url").text = station["icon"]
+        et.SubElement(image, "title").text = station["name"]
+        et.SubElement(image, "link").text = station["url"]
+    if category:
+        et.SubElement(channel, "category").text = category
+
+    # fetch programmes of this station (by channel_id)
+    s_pgm = []
+    for s in programmes:
+        s_pgm = s_pgm + [pgm for pgm in s if pgm["channel"]
+                         == station["channel_id"]]
+
+    # sort by start time
+    s_pgm = sorted(s_pgm, key=lambda k: k['start'])
+
+    # create the channel items
+    for r_pgm in s_pgm:
+        item = et.SubElement(channel, "item")
+        et.SubElement(item, "title").text = r_pgm["title"]
+        et.SubElement(item, "link").text = station["public_player_url"]
+
+        # prepare some vars
+        start_dt = dt.datetime.strptime(
+            r_pgm["start"], "%Y%m%d%H%M%S %z").astimezone()
+        stop_dt = dt.datetime.strptime(
+            r_pgm["stop"], "%Y%m%d%H%M%S %z").astimezone()
+        year = start_dt.strftime('%Y')
+
+        airdate = dt.datetime.strftime(start_dt, "%F")
+        airtime = dt.datetime.strftime(start_dt, "%H:%M") + '–' + \
+            dt.datetime.strftime(stop_dt, "%H:%M")
+
+        # Airtime length in hours and minutes
+        airtime_length_td = stop_dt - start_dt
+        airtime_length_mins = airtime_length_td.seconds // 60
+        airtime_length = '{0:2}'.format(airtime_length_mins // 60) + ':' + \
+                         '{0:02}'.format(airtime_length_mins % 60)  # + ':00'
+        airtime_length = airtime_length.strip()
+
+        # EPG <desc> allows newlines, make them <br/> for prettier display
+        desc = '<br/>'.join(r_pgm["desc"].splitlines())
+
+        # replacers
+        replacers = {
+            "{station_name}": station["name"],
+            "{station_description}": station["description"],
+            "{station_website}": station["url"],
+            "{player_url}": station["public_player_url"],
+            "{year}": r_pgm["start"][0:4],
+            "{category}": category,  # global
+            "{title}": r_pgm["title"],
+            "{subtitle}": r_pgm["sub-title"],
+            "{airdate}": airdate,
+            "{airtime}": airtime,
+            "{airtime_length}": airtime_length,
+            "{desc}": desc
+        }
+
+        description = replace_vars(replacers, rss_feed_description)
+
+        # remove extra whitespace from description
+        description = clean(description)
+
+        et.SubElement(item, "description").text = description
+        et.SubElement(item, "category").text = r_pgm["category"]
+
+        pub_date = utils.formatdate(start_dt.timestamp(), localtime=True)
+        et.SubElement(item, "pubDate").text = pub_date
+
+        # construct guid of channel_id and programme start time
+        guid = r_pgm["channel"] + '-' + start_dt.strftime('%Y%m%d%H%M%S')
+        et.SubElement(item, "guid", attrib={
+                      "isPermaLink": "false"}).text = guid
+
+        # media:... elements: Put all streams and the player link in a media group
+        media_group = et.SubElement(
+            item, "{http://search.yahoo.com/mrss/}group")
+        thumbnail = station["icon"]
+        if r_pgm["credits"]:
+            if r_pgm["credits"]["presenter"]:
+                if r_pgm["credits"]["presenter"]["image"]:
+                    thumbnail = r_pgm["credits"]["presenter"]["image"]
+        if thumbnail:
+            et.SubElement(
+                media_group, "{http://search.yahoo.com/mrss/}thumbnail", attrib={"url": thumbnail})
+
+        et.SubElement(media_group, "{http://search.yahoo.com/mrss/}player", attrib={
+            "url": station["public_player_url"],
+            "width": "800",
+            "height": "450"
+        })
+
+        for mount in station["mounts"]:
+            url = mount["url"]
+            medium = "video" if mount["is_video"] else "audio"
+            is_default = mount["is_default"]
+            expression = "nonstop"  # stream
+            title = mount["name"]  # type="plain", stream name
+
+            media_content = et.SubElement(media_group, "{http://search.yahoo.com/mrss/}content", attrib={
+                "url": url,
+                "medium": medium,
+                "isDefault": "true" if is_default else "false",
+                "expression": expression,
+                "lang": language
+            })
+            # sadly, not many readers use this yet; it should provide the mount name as title of the media:content
+            et.SubElement(
+                media_content, "{http://search.yahoo.com/mrss/}title", attrib={"type": "plain"}).text = title
+
+    with et.xmlfile(outfile, encoding="UTF-8") as xf:
+        xf.write_declaration()
+        xf.write(root, pretty_print=True)
 
 
 # some tests for arparse
@@ -934,8 +1131,7 @@ parser = argparse.ArgumentParser(description='Create XMLTV Tuner and EPG files f
 For much better programme data to be generated, create an AzuraCast API key and use the -a/--apikey option, which allows:
   - using otherwise invisible mounts, like an added video stream,
   - showing listener request info if a playlist has requests enabled
-  - adding a presenter image on live shows, and (mis-)using the
-    streamer comment field as a description
+  - adding a presenter image on live shows, and (mis-)using the streamer comment field as a description
   - showing extra info for syndicated content (remote playlists)
 
 The -t/--tvgurl option adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner files. This helps media center software like KODI to automatically locate the corresponding EPG data file, but only works if the generated M3U and XML files are available under the '/xmltv' path of your AzuraCast server.
@@ -974,6 +1170,8 @@ parser.add_argument('-t', '--tvgurl', action='store_true', default=add_tvg_url,
                     help='add \'tvg-url\' tags to M3U file; allows software to find the corresponding EPG automatically (see below)')
 parser.add_argument('-g', '--gzip', action='store_true', default=add_gzip,
                     help='additionally output a gzip-compressed (.gz) version of the EPG XML file; many clients can use this format, and it reduces transmission time and bandwidth')
+parser.add_argument('--rss', action='store_true', default=make_rss,
+                    help='create/update RSS 2.0 Feed(s); one feed per station')
 
 args = parser.parse_args()
 
@@ -982,6 +1180,7 @@ api_key = args.apikey
 public_only = args.public
 output_folder = args.output + '/'
 make_m3u = args.m3u
+make_rss = args.rss
 channel_icon_url = args.icon
 custom_player_url = args.customplayer
 num_days = args.days
@@ -1011,3 +1210,10 @@ for station in stations:
 # Create XMLTV file, add gzipped .gz version if requested
 create_xmltv(instance_url, stations, programmes,
              output_folder=output_folder, add_gzip=add_gzip)
+
+# Create RSS Feed files
+if make_rss:
+    for station in stations:
+        create_rss_station(instance_url, station, programmes,
+                           output_folder=output_folder)
+    # TODO: Create aggregate RSS for all stations
