@@ -685,15 +685,15 @@ This is also the reason why the `url-tvg` and `x-tvg-url` entries in the M3U fil
 
 I can’t give support for the many applications that use this format, but here’s a short list of apps I have tested or know they work fine with `azuracast_xmltv`:
 
-- [Jellyfin](https://jellyfin.org/)\* - The Free Software Media System
-- [KODI](https://kodi.tv/)\* - Entertainment Center
-- [Plex](https://www.plex.tv) - (non-free)
-- [Emby](https://emby.media/) - (non-free)
-- [TVHeadend](https://tvheadend.org/)\* - TV Streaming Server and Recorder
-- [Hypnotix](https://github.com/linuxmint/hypnotix)\* - The Linux Mint IPTV player (no EPG yet)
-- [Celluloid](https://github.com/celluloid-player/celluloid)\* - A simple GTK+ frontend for mpv (no EPG); default video player in Linux Mint
-- [VLC](https://www.videolan.org/vlc/)\* - The VLC media player (no EPG)
-- xTeVe\* ([GitHub](https://github.com/xteve-project/xTeVe)) ([Documentation](https://github.com/xteve-project/xTeVe-Documentation/blob/master/en/configuration.md)) - M3U Proxy, recommended
+- [Jellyfin](https://jellyfin.org/)\* – The Free Software Media System
+- [KODI](https://kodi.tv/)\* – Entertainment Center
+- [Plex](https://www.plex.tv) – (non-free)
+- [Emby](https://emby.media/) – (non-free)
+- [TVHeadend](https://tvheadend.org/)\* – TV Streaming Server and Recorder
+- [Hypnotix](https://github.com/linuxmint/hypnotix)\* – The Linux Mint IPTV player (no EPG yet)
+- [Celluloid](https://github.com/celluloid-player/celluloid)\* – A simple GTK+ frontend for mpv (no EPG); default video player in Linux Mint
+- [VLC](https://www.videolan.org/vlc/)\* – The VLC media player (no EPG)
+- xTeVe\* ([GitHub](https://github.com/xteve-project/xTeVe)) ([Documentation](https://github.com/xteve-project/xTeVe-Documentation/blob/master/en/configuration.md)) – M3U Proxy, recommended
 
 Many others are out there in the wild. Consult their documentation to find how to set up "XMLTV" or "IPTV". In KODI, some are under "PVR …" (Personal Video Recorder).
 
@@ -703,11 +703,12 @@ Here are some links for looking up related items:
 
 - The [XMLTV DTD](https://github.com/XMLTV/xmltv/blob/master/xmltv.dtd)\*
 - [XMLTV.org](https://xmltv.org)
-- [Kodi: IPTV einrichten](https://www.heise.de/tipps-tricks/Kodi-IPTV-einrichten-4676549.html) - (heise online; German)
-- [What is Live TV, PVR and Radio?](https://kodi.wiki/view/PVR) - (KODI FAQ)
-- [PVR IPTV Simple Client](https://kodi.wiki/view/Add-on:PVR_IPTV_Simple_Client)\* - IPTV client for KODI
-- [Kodinerds](https://www.kodinerds.net/) - KODI-related German Forum
-- [Kodinerds IPTV - Freie und legale Streams für Kodi](https://github.com/jnk22/kodinerds-iptv) - Free and legal streams for IPTV; German, but has international channels.
-- [ErsatzTV](https://ersatztv.org/)\* - Your Personal IPTV Server
+- [Kodi: IPTV einrichten](https://www.heise.de/tipps-tricks/Kodi-IPTV-einrichten-4676549.html) – (heise online; German)
+- [What is Live TV, PVR and Radio?](https://kodi.wiki/view/PVR) – (KODI FAQ)
+- [PVR IPTV Simple Client](https://kodi.wiki/view/Add-on:PVR_IPTV_Simple_Client)\* – IPTV client for KODI
+- [Kodinerds](https://www.kodinerds.net/) – KODI-related German Forum
+- [Kodinerds IPTV - Freie und legale Streams für Kodi](https://github.com/jnk22/kodinerds-iptv) – Free and legal streams for IPTV; German, but has international channels.
+- [ErsatzTV](https://ersatztv.org/)\* – Your Personal IPTV Server
+- The [RSS 2.0 Specification](https://www.rssboard.org/rss-specification)\* – RSS Advisory Board
 
 \* Free and Open Source Software I personally use and recommend.
