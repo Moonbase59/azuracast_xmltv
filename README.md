@@ -37,6 +37,10 @@ _Hypnotix, the Linux Mint IPTV player (no EPG yet)_
 ![Robert Long - Komisch_001](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/aa22201a-0c37-47ae-8f03-11c54f6c3b72)  
 _Celluloid, a GTK+ frontend for mpv (no EPG)_
 
+![News (1324) - cloud syvi net – Mozilla Firefox_001](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/20cb0cbe-7f38-4fc9-9b8a-07747207e29c)  
+_Station RSS 2.0 Feed, as seen by Nextcloud (v0.12.0 and up)_
+
+
 Note all this _may_ work on Windows machines, but I don’t know. I’m a Linux guy.
 
 
@@ -182,6 +186,7 @@ From the help screen:
 ```
 usage: azuracast_xmltv [-h] [-v] [-u URL] [-i URL] [-c URL] [-d DAYS] [-f]
                        [-o FOLDER] [-a APIKEY] [-p] [-m] [-r] [-t] [-g]
+                       [--rss]
 
 Create XMLTV Tuner and EPG files from an AzuraCast Web Radio.
 
@@ -218,6 +223,8 @@ options:
                         the EPG XML file; many clients can use this format,
                         and it reduces transmission time and bandwidth
                         (default: True)
+  --rss                 create/update RSS 2.0 Feed(s); one feed per station
+                        (default: False)
 
 azuracast_xmltv can create XMLTV M3U Tuner files and XML EPG files for both
 your own and other AzuraCast stations.
@@ -226,8 +233,8 @@ For much better programme data to be generated, create an AzuraCast API key
 and use the -a/--apikey option, which allows:
   - using otherwise invisible mounts, like an added video stream,
   - showing listener request info if a playlist has requests enabled
-  - adding a presenter image on live shows, and (mis-)using the
-    streamer comment field as a description
+  - adding a presenter image on live shows, and (mis-)using the streamer
+comment field as a description
   - showing extra info for syndicated content (remote playlists)
 
 The -t/--tvgurl option adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner
@@ -371,6 +378,36 @@ Go to https://example.com/public/niteradio, click on ›Request Song‹ and sele
 ```
 
 Now _this_ looks like some program, right?
+
+## RSS 2.0 Feeds (one per station)
+
+From version 0.12.0, `azuracast_xmltv` can optionally generate **RSS 2.0 Feeds**, too. Using the `--rss` option, these can be created/updated together with the EPG in one go. We produce one file per station, which can easily be cached for great performance.
+
+The RSS feeds build on the already existing, flexible customization logic and can even use HTML code (although some readers strip some HTML elements). You get a chronological feed with all your shows, image, description, web player and stream links. My generator uses modern technologies, `<media:…>` elements and all.
+
+### Here are some screenshots
+
+![Auswahl_296](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/07b69b8c-9dbe-444d-9bb9-a48f39682bdb)  
+_Station RSS Feed as seen by Nextcloud._
+
+Scheduled programmes are presented in a chronological list, click on a list entry for more information, or click the globe icon to directly jump to the station’s web player to make a request.
+
+![News (1324) - cloud syvi net – Mozilla Firefox_001](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/c0bc9a8e-3cb2-4fdf-8571-c5bea147f7e4)  
+_Single programme as seen by Nextcloud_
+
+The description is highly configurable, as with the EPG, but you can even use HTML here.
+
+A click on the image opens the web player.
+
+![Nite Radio – Mozilla Firefox_032](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/3ff33950-cde5-4bf1-b821-89d6a824795a)  
+_Station RSS Feed as seen by the Firefox "Livemarks" extension_
+
+The RSS feed looks good even in the most basic feed reader. A click on the title opens the web player, but here you also have _direct links to all the station’s streams_. Listeners enjoy the information, and your station is always only one click away.
+
+The RSS 2.0 Feeds we generate are _standards-compliant_ and usually _validate_ just fine. Some validators have problems with feed items lying in the future, that can safely be ignored.
+
+We use the most _modern technologies_ and the _most compatible_ set of features, so chances are good that a feature _is already there_ when fead-readers finally catch up. Currently, not every feed reader supports all features.
+
 
 ## A note on mount point display names
 
