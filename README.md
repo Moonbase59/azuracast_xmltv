@@ -404,6 +404,12 @@ _Station RSS Feed as seen by the Firefox "Livemarks" extension_
 
 The RSS feed looks good even in the most basic feed reader. A click on the title opens the web player, but here you also have _direct links to all the station’s streams_. Listeners enjoy the information, and your station is always only one click away.
 
+![Liferea_001](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/fff3ad14-da01-4104-b94a-4bb66eaa80c8)  
+_Station RSS Feed as seen by Liferea (a famous Linux feed reader)_
+
+![Liferea_002](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/5b13b205-851b-451b-a18f-204047110882)  
+_You can even use the web player within some feed readers_
+
 The RSS 2.0 Feeds we generate are _standards-compliant_ and usually _validate_ just fine. Some validators have problems with feed items lying in the future, that can safely be ignored.
 
 We use the most _modern technologies_ and the _most compatible_ set of features, so chances are good that a feature _is already there_ when fead-readers finally catch up. Currently, not every feed reader supports all features.
