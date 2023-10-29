@@ -103,7 +103,7 @@
 
 # version info
 import sys
-__version_info__ = ('0', '12', '0')
+__version_info__ = ('0', '12', '1')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -160,8 +160,15 @@ category = 'Music'
 #   'Classic Rock', 'Folk Rock' and 'Hard Rock', it would show
 #   "Classic Rock, Folk Rock & Hard Rock".
 #
-# In "rss_feed":
-# -
+# In "rss_feed_description":
+# - {title} -- programme title
+# - {subtitle} -- programme sub-title
+# - {airdate} -- date of programme start "YYYY-MM-DD"
+# - {airtime} -- programme start & end time "HH:MM–HH:MM"
+# - {airtime_length} -- programme length "HH:MM"
+# - {category} -- global category ("Music")
+# - {desc} -- original programme description, generated from above elements
+#   newlines in {desc} will automatically be converted to <br/>
 #
 #  * = This can only be used with an API key, i.e., on your own station.
 # ** = Will point to AzuraCast's default web player, or a custom
@@ -229,14 +236,6 @@ Visit us on {station_website}"""
 
 # RSS Feed description, HTML allowed here
 # Note some feed readers strip many HTML elements, so TEST.
-# - {title} -- programme title
-# - {subtitle} -- programme sub-title
-# - {airdate} -- date of programme start "YYYY-MM-DD"
-# - {airtime} -- programme start & end time "HH:MM–HH:MM"
-# - {airtime_length} -- programme length "HH:MM"
-# - {category} -- global category ("Music")
-# - {desc} -- original programme description, generated from above elements
-#   newlines in {desc} will automatically be converted to <br/>
 rss_feed_description = """<h2>{title}</h2>
 <h3>{subtitle}</h3>
 <p><strong>{airdate}&emsp;{airtime}</strong> ({airtime_length})&emsp;{station_name} ({category})</p>
