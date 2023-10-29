@@ -96,7 +96,7 @@
 #     This is for media centers like KODI that can separate Radio & TV streams
 #     (if 'radio' is true, the stream will appear in  the "Radio" menu, not "TV")
 # 2023-10-29 - Moonbase - v0.12.0
-#   - add option --rss, an experimental RSS 2.0 Feed generator
+#   - add option --rss, a RSS 2.0 Feed generator (experimental for now)
 #     (creates one file per station, well cacheable, "station_shortcode.rss")
 #     Makes sense only when also served from the "/xmltv" server path.
 #   - use correct (global) language attribute in XMLTV XML files and RSS
