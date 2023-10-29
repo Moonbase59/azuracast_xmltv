@@ -571,8 +571,9 @@ This is just a Python script, so you can open it using a text editor. (Windows u
 Near the beginning of the file, you’ll find many user-customizable options, most notably the program title/sub-title and description text to go with…
 - _live shows_ (streamer/DJ),
 - _syndicated content_ (remote playlists),
-- playlists that have _listener requests_ enabled, and
-- _gap filler_ programmes.
+- playlists that have _listener requests_ enabled,
+- _gap filler_ programmes, and
+- _RSS Feeds_ (HTML allowed here).
 
 You can also set defaults for most options here. These will be shown when `--help` is invoked.
 
@@ -597,6 +598,7 @@ But you haven’t used an _API key_, which is needed to use `{playlists}`, so we
 - `{station_website}` — the station website URL (this is _not_ the AzuraCast URL)
 - `{player_url}`\*\* — station’s web player URL
 - `{year}` — start year of the programme
+- `{category}` — global category, usually "Music"
 
 #### In `requests_enabled`
 
@@ -620,6 +622,14 @@ But you haven’t used an _API key_, which is needed to use `{playlists}`, so we
 - `{playlists}`\* — comma-separated list of playlist names that make up the general rotation (enabled, type default, not on schedule).  
   So if your general rotation was made up of the playlists `Classic Rock`, `Folk Rock` and `Hard Rock`, it would show `Classic Rock, Folk Rock & Hard Rock`.
 
+#### In `rss_feed_description`
+
+- `{title}` — programme title
+- `{subtitle}` — programme sub-title
+- `{airdate}` — date of programme start "YYYY-MM-DD"
+- `{airtime}` — programme start & end time "HH:MM–HH:MM"
+- `{airtime_length}` — programme length "HH:MM"
+- `{desc}` — original programme description, generated from above elements. Newlines in `{desc}` will automatically be converted to `<br/>`.
 
 \* = This can only be used with an API key, i.e., on your own station.
 
