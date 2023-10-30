@@ -4,7 +4,7 @@
 
 > _Don’t miss the [Discussions](https://github.com/Moonbase59/azuracast_xmltv/discussions)! New versions are announced there, and useful hints._
 
-> _**Did you know? You can follow my [commits](https://github.com/Moonbase59/azuracast_xmltv/commits.atom) and the [discussions](https://github.com/Moonbase59/azuracast_xmltv/discussions.atom) using your RSS/Atom feed reader!** Just copy-paste the links into your reader as a new subscription and you’ll never miss anything again._
+> _**Did you know? You can follow my [commits](https://github.com/Moonbase59/azuracast_xmltv/commits.atom), the [discussions](https://github.com/Moonbase59/azuracast_xmltv/discussions.atom) or just the [announcements](https://github.com/Moonbase59/azuracast_xmltv/discussions/categories/announcements.atom) using your RSS/Atom feed reader!** Just copy-paste the links into your reader as a new subscription and you’ll never miss anything again._
 
 The big picture behind this is to create **standards-compliant files** to
 - **easily access your station(s)** from almost any media player or server
