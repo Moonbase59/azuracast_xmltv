@@ -100,10 +100,14 @@
 #     (creates one file per station, well cacheable, "station_shortcode.rss")
 #     Makes sense only when also served from the "/xmltv" server path.
 #   - use correct (global) language attribute in XMLTV XML files and RSS
+# 2023-10-30 - Moonbase - v0.12.2
+#   - an approach to make URLs in the RSS description clickable by turning them
+#     into HTML anchors. Based on John Gruber’s "Liberal Regex Pattern for Any URLs"
+#   - Some wording changes in the sample texts.
 
 # version info
 import sys
-__version_info__ = ('0', '12', '1')
+__version_info__ = ('0', '12', '2')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -210,7 +214,9 @@ live_subtitle = ""
 live_description = """
 
 Live Show on {station_name}, hosted by {presenter}.
-{comments}"""
+{comments}
+
+Tune in at {station_website}!"""
 
 # "Gap Filler" text to be shown when a programme is actually a gap filler.
 # After parsing, the gap_filler_title will be used as playlist name and the result
@@ -225,14 +231,14 @@ gap_filler_subtitle = "{playlists}"
 # this will be the programme's description
 # Your text should make sense even if {playlists} is empty!
 # Multiple successive blanks will be automatically replaced by a single blank.
-gap_filler_description = """Your favorite sound, 24 hours a day, 7 days a week.
+gap_filler_description = """Your favorite songs, 24 hours a day, 7 days a week.
 The best {playlists} in {year} — just here, on {station_name}."""
 
 # Text to be appended to EVERY programme description (seldom needed)
 append_to_description = """
 
 Program Copyright © {year} {station_name} — {station_description}
-Visit us on {station_website}"""
+Visit us on {station_website}."""
 
 # RSS Feed description, HTML allowed here
 # Note some feed readers strip many HTML elements, so TEST.
@@ -331,7 +337,6 @@ try:
     import requests
     import json
     import lxml.etree as et
-#    import tzlocal
     import datetime as dt
     from urllib.parse import urlparse
     import argparse
@@ -911,6 +916,19 @@ def create_xmltv(instance_url, stations, programmes, output_folder='', add_gzip=
                 shutil.copyfileobj(f_in, f_out)
 
 
+def linkify_urls(text):
+    """
+    (Try to) replace any URLs in text with anchor links, for HTML conversion.
+    Based on John Gruber’s article: https://daringfireball.net/2010/07/improved_regex_for_matching_urls
+    and Gist: https://gist.github.com/gruber/249502
+    "Liberal Regex Pattern for Any URLs"
+    """
+    urls = re.compile(
+        r"(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))", re.MULTILINE | re.UNICODE)
+    text = urls.sub(r'<a href="\1" target="_blank">\1</a>', text)
+    return text
+
+
 def create_rss_station(instance_url, station, programmes, output_folder=''):
     """Create an RSS Feed for a single station"""
 
@@ -1015,6 +1033,9 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
 
         # remove extra whitespace from description
         description = clean(description)
+
+        # make URLs clickable in HTML
+        description = linkify_urls(description)
 
         et.SubElement(item, "description").text = description
         et.SubElement(item, "category").text = r_pgm["category"]
