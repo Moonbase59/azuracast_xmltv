@@ -111,10 +111,13 @@
 #     if a tag was empty, like <h3>{subtitle}</h3>. Simply adding a blank helps
 #     and doesn’t conflict with other readers.
 #   - Added "No worries..." to "Edit this file..." help text.
+# 2023-10-30 - Moonbase - v0.13.0
+#   - Fix crash for streamer schedule (presenter credits lookup problem in RSS)
+#   - rework credits lookup & generation code for RSS and EPG
 
 # version info
 import sys
-__version_info__ = ('0', '12', '3')
+__version_info__ = ('0', '13', '0')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -903,14 +906,17 @@ def create_xmltv(instance_url, stations, programmes, output_folder='', add_gzip=
                           attrib=attrib_lang).text = r_pgm["desc"]
 
             credits = et.SubElement(programme, "credits")
-            for c in r_pgm["credits"]:
-                for k, v in c.items():
-                    credit = et.SubElement(credits, k)
-                    credit.text = v["name"]
-                    for k1, v1 in v.items():
-                        if k1 == "image":
-                            et.SubElement(credit, k1, attrib={
-                                          "type": "person"}).text = v1
+
+            # see if we have a presenter in credits
+            presenter = next(
+                (item["presenter"] for item in r_pgm["credits"] if item.get("presenter")), None)
+            if presenter:
+                # add presenter credit and image (if available)
+                credit = et.SubElement(credits, "presenter")
+                credit.text = presenter["name"]
+                if presenter["image"]:
+                    et.SubElement(credit, "image", attrib={
+                                  "type": "person"}).text = presenter["image"]
 
             et.SubElement(programme, "category",
                           attrib=attrib_lang).text = r_pgm["category"]
@@ -1067,11 +1073,10 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
         # media:... elements: Put all streams and the player link in a media group
         media_group = et.SubElement(
             item, "{http://search.yahoo.com/mrss/}group")
-        thumbnail = station["icon"]
-        if r_pgm["credits"]:
-            if r_pgm["credits"]["presenter"]:
-                if r_pgm["credits"]["presenter"]["image"]:
-                    thumbnail = r_pgm["credits"]["presenter"]["image"]
+        # iterate over credits, trying to find a presenter image
+        # else use station icon instead
+        thumbnail = next((item["presenter"]["image"] for item in r_pgm["credits"] if item.get(
+            "presenter", {}).get("image")), station["icon"])
         if thumbnail:
             et.SubElement(
                 media_group, "{http://search.yahoo.com/mrss/}thumbnail", attrib={"url": thumbnail})
