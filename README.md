@@ -1,12 +1,17 @@
 # azuracast_xmltv
 
-**Create rich XMLTV Tuner and EPG files from an [AzuraCast](https://www.azuracast.com/) Web Radio.**
+## Create rich XMLTV Tuner, EPG and RSS feeds from an [AzuraCast](https://www.azuracast.com/) Web Radio.
+
+> _Don’t miss the [Discussions](https://github.com/Moonbase59/azuracast_xmltv/discussions)! New versions are announced there, and useful hints._
+
+> _**Did you know? You can follow my [commits](https://github.com/Moonbase59/azuracast_xmltv/commits.atom) and the [discussions](https://github.com/Moonbase59/azuracast_xmltv/discussions.atom) using your RSS/Atom feed reader!** Just copy-paste the links into your reader as a new subscription and you’ll never miss anything again._
 
 The big picture behind this is to create **standards-compliant files** to
 - **easily access your station(s)** from almost any media player or server
 - get **better distribution** by providing interested listeners with
   - an easy access to your stations and streams
   - an electronic program guide (EPG) so they can actively tune in to your shows
+  - RSS Feeds with show info and direct links to the web player & streams
  
 Therefore I recommend regenerating the files periodically and **linking to them on your website**, so your listeners can point their media centers/players directly at these links and stay up-to-date with your station(s) automatically.
 
@@ -17,7 +22,7 @@ Unfortunately, there isn’t a "standard" location for this yet. Maybe we should
 
 It would make things so much easier for server operators and listeners alike.
 
-You’ll get **one M3U file per station** (containing that station's streams) and **one XML EPG file per AzuraCast instance** (containing the scheduled programs for all your stations).
+You’ll get **one M3U file per station** (containing that station’s streams), **one RSS file per station** (containing that station’s scheduled programs, web player and stream links), and **one XML EPG file per AzuraCast instance** (containing the scheduled programs for all your stations).
 
 ### Some screenshots: This is what it looks like
 
