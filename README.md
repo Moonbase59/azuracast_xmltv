@@ -251,7 +251,7 @@ This is for software like KODI, which can distinguish between Radio and TV
 channels and displays these in separate menus.
 
 Edit './azuracast_xmltv' using a text editor to change some defaults near the
-top of the file.
+top of the file. No worries, everything is well documented.
 
 Please report any issues to
 https://github.com/Moonbase59/azuracast_xmltv/issues.

@@ -104,10 +104,17 @@
 #   - an approach to make URLs in the RSS description clickable by turning them
 #     into HTML anchors. Based on John Gruber’s "Liberal Regex Pattern for Any URLs"
 #   - Some wording changes in the sample texts.
+# 2023-10-30 - Moonbase - v0.12.3
+#   - Fix #10: occasionally finds the wrong playlist in a schedule if multiple
+#     playlists have the same name (which IS allowed), AND you were using an API key.
+#   - Fix #9: display problem in Liferea 1.13.7: It messes up the following text
+#     if a tag was empty, like <h3>{subtitle}</h3>. Simply adding a blank helps
+#     and doesn’t conflict with other readers.
+#   - Added "No worries..." to "Edit this file..." help text.
 
 # version info
 import sys
-__version_info__ = ('0', '12', '2')
+__version_info__ = ('0', '12', '3')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -184,12 +191,11 @@ category = 'Music'
 # this will be used as a programme's title
 requests_enabled_title = "{playlist} (requests enabled)"
 # this will be used as a programme's subtitle
-requests_enabled_subtitle = "Your favorite station, YOUR music!"
+requests_enabled_subtitle = "Your favorite station. YOUR music."
 # this will be appended to a programme's description, maybe use starting newline(s)
 requests_enabled_description = """
 
-Request lines open! Make this program YOURS by adding a request.
-Go to {request_url}, click on ›Request Song‹ and select your favorite."""
+Request lines open! Make this program YOURS by adding a request: Go to {request_url}, click on ›Request Song‹ and select your favorite."""
 
 # Text to add to a programme listing if it is a syndicated playlist.
 # (source: remote_url). Only works with API key.
@@ -242,8 +248,11 @@ Visit us on {station_website}."""
 
 # RSS Feed description, HTML allowed here
 # Note some feed readers strip many HTML elements, so TEST.
+# Liferea 1.13.7 chokes on empty tags, and messes up the display,
+# so add a blank to the <h3>{subtitle}</h3> in case the
+# subtitle is empty.
 rss_feed_description = """<h2>{title}</h2>
-<h3>{subtitle}</h3>
+<h3>{subtitle} </h3>
 <p><strong>{airdate}&emsp;{airtime}</strong> ({airtime_length})&emsp;{station_name} ({category})</p>
 <p>{desc}</p>"""
 
@@ -509,6 +518,12 @@ def get_stations(api, channel_icon_url='', public_only=True, videostream_keyword
                     "include_in_requests": playlist["include_in_requests"],
                     "is_scheduled": playlist["schedule_items"] != []
                 }
+                # store list of schedules (IDs) this playlist is in,
+                # so we can find the correct one in get_programme()
+                # if multiple playlists have the same name (which IS allowed)
+                p["schedule_ids"] = [d.get('id')
+                                     for d in playlist["schedule_items"]]
+
                 if playlist["is_enabled"]:
                     s["playlists"].append(p)
 
@@ -723,9 +738,10 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
 
         # try to enrich programme with playlist info
         if r_pgm["type"] == "playlist":
-            # try to find the corresponding playlist by name (sadly, no ID)
+            # Find the CORRECT playlist if more than one playlist has the same name
+            # Playlist Name and Schedule ID must match.
             pl = next(
-                (item for item in station["playlists"] if item["name"] == r_pgm["name"]), None)
+                (item for item in station["playlists"] if item["name"] == r_pgm["name"] and r_pgm["id"] in item["schedule_ids"]), None)
 
             # playlist has listener requests enabled, enrich title, sub-title, and description
             if pl and pl["include_in_requests"]:
@@ -1160,7 +1176,7 @@ See installation instructions at {APPURL}.
 The -r/--radio option adds a 'radio="true"' tag to the M3U #EXTINF lines, if a stream’s display name doesn’t contain any of the words {', '.join("'"+k+"'" for k in videostream_keywords)} (you can customize this list).
 This is for software like KODI, which can distinguish between Radio and TV channels and displays these in separate menus.
 
-Edit '{argparse._sys.argv[0]}' using a text editor to change some defaults near the top of the file.
+Edit '{argparse._sys.argv[0]}' using a text editor to change some defaults near the top of the file. No worries, everything is well documented.
 
 Please report any issues to {APPURL}/issues.""",
                                  formatter_class=CustomFormatter)
