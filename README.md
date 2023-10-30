@@ -46,7 +46,7 @@ _Celluloid, a GTK+ frontend for mpv (no EPG)_
 _Station RSS 2.0 Feed, as seen by Nextcloud (v0.12.0 and up)_
 
 
-Note all this _may_ work on Windows machines, but I don’t know. I’m a Linux guy.
+Note all this _may_ work on Windows machines, but I don’t know. I’m a Linux guy. You’ll run it on your AzuraCast server anyway, right?
 
 
 ## Installation
