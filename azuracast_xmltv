@@ -119,10 +119,12 @@
 #     This will enhance UX since the reader should remove historic items.
 #     Validity indicates at what date & time the stream links actually play
 #     what is described in the item (programme).
+# 2023-10-31 - Moonbase - v0.13.2
+#   - refactor "isodate()" into "rfc3339_date()" -- more reliable datetime strings
 
 # version info
 import sys
-__version_info__ = ('0', '13', '1')
+__version_info__ = ('0', '13', '2')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -694,17 +696,20 @@ def create_gap_fillers(station, programmes):
     return gaps
 
 
-def isodate(datetime):
-    """format a datetime instance as ISO 8601/W3C-DTF string: "YYYY-mm-ddTHH:MM:SS+00:00"""
-    # needed because "%:z" doesn’t (yet) work on all platforms
-    utc_offset = datetime.strftime("%z")
-    if utc_offset[1:] == "0000":
-        # UTC, W3C wants "Z" not "+0000"
-        utc_offset = "Z"
+def rfc3339_date(dt, utc_z=False):
+    """ Return datetime object as RFC 3339 string, an ISO 8601 profile.
+        Compatible with W3C-DTF format.
+        utc_z=True outputs "Z" instead of "+00:00" for UTC datetimes."""
+
+    if dt.tzinfo is None:
+        suffix = "-00:00" # unknown offset, naive dt
     else:
-        # offset in ±00:00 format
-        utc_offset = utc_offset[0:3] + ":" + utc_offset[3:]
-    return datetime.strftime("%Y-%m-%dT%H:%M:%S") + utc_offset
+        # use "%z" because "%:z" not yet supported everywhere
+        suffix = dt.strftime("%z")
+        suffix = suffix[:-2] + ":" + suffix[-2:]
+        if utc_z and suffix == "+00:00":
+            suffix = "Z"
+    return dt.strftime("%Y-%m-%dT%H:%M:%S") + suffix
 
 
 def get_programme(api, station, num_days=num_days, fill_gaps=False):
@@ -721,9 +726,9 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
     # end requested number of days later
     end = start + dt.timedelta(days=num_days)
 
-    # API expects ISO 8601 datetime string
-    start = isodate(start.astimezone())
-    end = isodate(end.astimezone())
+    # API expects RFC 3339 datetime string
+    start = rfc3339_date(start.astimezone())
+    end = rfc3339_date(end.astimezone())
 
     params = {
         "start": start,
@@ -1086,9 +1091,9 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
                       "isPermaLink": "false"}).text = guid
 
         # use <dcterms:valid> to put validity on the ITEM (not every media element)
-        # start and end use ISO 8601 datetime format
-        start = isodate(start_dt)
-        end = isodate(stop_dt)
+        # start and end use W3C-DTF datetime format
+        start = rfc3339_date(start_dt, utc_z=True)
+        end = rfc3339_date(stop_dt, utc_z=True)
         et.SubElement(
             item, "{http://purl.org/dc/terms/}valid").text = f"start={start}; end={end}; scheme=W3C-DTF"
 
