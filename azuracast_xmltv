@@ -114,10 +114,12 @@
 # 2023-10-30 - Moonbase - v0.13.0
 #   - Fix crash for streamer schedule (presenter credits lookup problem in RSS)
 #   - rework credits lookup & generation code for RSS and EPG
+# 2023-10-30 - Moonbase - v0.13.1
+#   - add <fh:incremental>false</fh:incremental> to RSS feed
 
 # version info
 import sys
-__version_info__ = ('0', '13', '0')
+__version_info__ = ('0', '13', '1')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -689,6 +691,19 @@ def create_gap_fillers(station, programmes):
     return gaps
 
 
+def isodate(datetime):
+    """format a datetime instance as ISO 8601/W3C-DTF string: "YYYY-mm-ddTHH:MM:SS+00:00"""
+    # needed because "%:z" doesn’t (yet) work on all platforms
+    utc_offset = datetime.strftime("%z")
+    if utc_offset[1:] == "0000":
+        # UTC, W3C wants "Z" not "+0000"
+        utc_offset = "Z"
+    else:
+        # offset in ±00:00 format
+        utc_offset = utc_offset[0:3] + ":" + utc_offset[3:]
+    return datetime.strftime("%Y-%m-%dT%H:%M:%S") + utc_offset
+
+
 def get_programme(api, station, num_days=num_days, fill_gaps=False):
     """Get a channel's programme"""
 
@@ -703,18 +718,9 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
     # end requested number of days later
     end = start + dt.timedelta(days=num_days)
 
-    # generate utc offset with colon ourselves, using "%:z" doesn't work everywhere
-    utc_offset = start.astimezone().strftime("%z")
-    utc_offset = utc_offset[0:3] + ':' + utc_offset[3:]
-    start = start.astimezone().strftime(
-        "%Y-%m-%dT%H:%M:%S") + utc_offset
-
-    # generate utc offset with colon ourselves, using "%:z" doesn't work everywhere
-    # 'end' could be after daylight savings time switching, so do it again
-    utc_offset = end.astimezone().strftime("%z")
-    utc_offset = utc_offset[0:3] + ':' + utc_offset[3:]
-    end = end.astimezone().strftime(
-        "%Y-%m-%dT%H:%M:%S") + utc_offset
+    # API expects ISO 8601 datetime string
+    start = isodate(start.astimezone())
+    end = isodate(end.astimezone())
 
     params = {
         "start": start,
@@ -967,7 +973,9 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
     # et.register_namespace("atom", "http://www.w3.org/2005/Atom")
     nsmap = {
         "atom": "http://www.w3.org/2005/Atom",
-        "media": "http://search.yahoo.com/mrss/"
+        "media": "http://search.yahoo.com/mrss/",
+        "fh": "http://purl.org/syndication/history/1.0",
+        "dcterms": "http://purl.org/dc/terms/"
     }
     root = et.Element("rss", attrib={"version": "2.0"}, nsmap=nsmap)
 
@@ -998,6 +1006,11 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
         et.SubElement(image, "link").text = station["url"]
     if category:
         et.SubElement(channel, "category").text = category
+
+    # <fh:incremental>false</fh:incremental> this is the "complete set"
+    # and NOT an incremental feed
+    #et.SubElement(channel, "{http://purl.org/syndication/history/1.0}incremental").text = "false"
+    et.SubElement(channel, "{http://purl.org/syndication/history/1.0}complete")
 
     # fetch programmes of this station (by channel_id)
     s_pgm = []
@@ -1069,6 +1082,13 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
         guid = r_pgm["channel"] + '-' + start_dt.strftime('%Y%m%d%H%M%S')
         et.SubElement(item, "guid", attrib={
                       "isPermaLink": "false"}).text = guid
+
+        # use <dcterms:valid> to put validity on the ITEM (not every media element)
+        # start and end use ISO 8601 datetime format
+        start = isodate(start_dt)
+        end = isodate(stop_dt)
+        et.SubElement(
+            item, "{http://purl.org/dc/terms/}valid").text = f"start={start}; end={end}; scheme=W3C-DTF"
 
         # media:... elements: Put all streams and the player link in a media group
         media_group = et.SubElement(
