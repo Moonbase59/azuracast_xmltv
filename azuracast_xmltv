@@ -115,7 +115,10 @@
 #   - Fix crash for streamer schedule (presenter credits lookup problem in RSS)
 #   - rework credits lookup & generation code for RSS and EPG
 # 2023-10-30 - Moonbase - v0.13.1
-#   - add <fh:incremental>false</fh:incremental> to RSS feed
+#   - add <fh:complete/> and per-item validity <dcterms:valid> to RSS feed
+#     This will enhance UX since the reader should remove historic items.
+#     Validity indicates at what date & time the stream links actually play
+#     what is described in the item (programme).
 
 # version info
 import sys
@@ -1007,9 +1010,8 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
     if category:
         et.SubElement(channel, "category").text = category
 
-    # <fh:incremental>false</fh:incremental> this is the "complete set"
-    # and NOT an incremental feed
-    #et.SubElement(channel, "{http://purl.org/syndication/history/1.0}incremental").text = "false"
+    # set <fh:complete/> to indicate this feed is "the complete set"
+    # and the feed reader should ignore other, previously downloaded historic data
     et.SubElement(channel, "{http://purl.org/syndication/history/1.0}complete")
 
     # fetch programmes of this station (by channel_id)
