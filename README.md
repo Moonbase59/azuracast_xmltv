@@ -22,7 +22,7 @@ Unfortunately, there isn’t a "standard" location for this yet. Maybe we should
 
 It would make things so much easier for server operators and listeners alike.
 
-You’ll get **one M3U file per station** (containing that station’s streams), **one RSS file per station** (containing that station’s scheduled programs, web player and stream links), and **one XML EPG file per AzuraCast instance** (containing the scheduled programs for all your stations).
+You’ll get **one M3U file per station** (containing that station’s streams), **one RSS file per station** (containing that station’s scheduled programs, web player and stream links), and **one XML EPG file per AzuraCast instance** (containing the scheduled programs for all your stations). Since v0.14.0, you also get an **additional M3U file per AzuraCast instance** (containing ALL station’s streams).
 
 ### Some screenshots: This is what it looks like
 
@@ -190,10 +190,10 @@ Probably after trying out the above on a local machine, you might want to instal
 From the help screen:
 ```
 usage: azuracast_xmltv [-h] [-v] [-u URL] [-i URL] [-c URL] [-d DAYS] [-f]
-                       [-o FOLDER] [-a APIKEY] [-p] [-m] [-r] [-t] [-g]
-                       [--rss]
+                       [-o FOLDER] [-a APIKEY] [-p] [-m] [--group GROUP] [-r]
+                       [-t] [-g] [--rss]
 
-Create XMLTV Tuner and EPG files from an AzuraCast Web Radio.
+Create XMLTV Tuner, EPG and RSS Feed files from an AzuraCast Web Radio.
 
 options:
   -h, --help            show this help message and exit
@@ -218,6 +218,8 @@ options:
                         False)
   -m, --m3u             create M3U XMLTV Tuner file(s); only needed on first
                         run or after changes in AzuraCast (default: False)
+  --group GROUP         set M3U 'group-title' to something other than station
+                        name (see below) (default: )
   -r, --radio           add 'radio="true"' tags to M3U #EXTINF; allows
                         distinction between radio and TV channels (see below)
                         (default: True)
@@ -231,8 +233,8 @@ options:
   --rss                 create/update RSS 2.0 Feed(s); one feed per station
                         (default: False)
 
-azuracast_xmltv can create XMLTV M3U Tuner files and XML EPG files for both
-your own and other AzuraCast stations.
+azuracast_xmltv can create XMLTV M3U Tuner, XML EPG and RSS 2.0 Feed files for
+both your own and other AzuraCast stations.
 
 For much better programme data to be generated, create an AzuraCast API key
 and use the -a/--apikey option, which allows:
@@ -242,18 +244,29 @@ and use the -a/--apikey option, which allows:
 comment field as a description
   - showing extra info for syndicated content (remote playlists)
 
-The -t/--tvgurl option adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner
-files. This helps media center software like KODI to automatically locate the
+--group GROUP modifies the 'group-title' in M3U Tuner files. It normally
+contains the station name. Using this, you can group all stations of an
+AzuraCast server under a common name, or use something like 'Radio-DE' to
+merge with larger, existing lists. A very few clients like KODI support
+multiple groups. Separate these with a semicolon ';'. Empty values will be
+replaced by the station name: ';Radio-DE' --> 'Your Station;Radio-DE',
+'Radio;;Radio-DE' --> 'Radio;Your Station;Radio-DE'.
+
+-r/--radio adds a 'radio="true"' tag to the M3U #EXTINF lines, if a stream’s
+display name doesn’t contain any of the words 'Video', 'TV', 'Testbild',
+'mpeg', 'mpg', 'm2t', 'm2ts', 'ts' (you can customize this list).
+This is for software like KODI, which can distinguish between Radio and TV
+channels and displays these in separate menus.
+
+-t/--tvgurl adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner files. This
+helps media center software like KODI to automatically locate the
 corresponding EPG data file, but only works if the generated M3U and XML files
 are available under the '/xmltv' path of your AzuraCast server.
 See installation instructions at
 https://github.com/Moonbase59/azuracast_xmltv.
 
-The -r/--radio option adds a 'radio="true"' tag to the M3U #EXTINF lines, if a
-stream’s display name doesn’t contain any of the words 'Video', 'TV',
-'Testbild', 'mpeg', 'mpg', 'm2t', 'm2ts', 'ts' (you can customize this list).
-This is for software like KODI, which can distinguish between Radio and TV
-channels and displays these in separate menus.
+Output files are named after the (sanitized) station shortcode ("URL Stub" in
+AzuraCast), and the server base URL.
 
 Edit './azuracast_xmltv' using a text editor to change some defaults near the
 top of the file. No worries, everything is well documented.
@@ -453,6 +466,12 @@ _Radio: audio streams only_
 
 ![screenshot00009](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/6cf1fe7b-4342-45af-870b-2738f543fdc4)  
 _TV: video streams only_
+
+### Grouping streams and stations
+
+_To be supplied._
+
+Read the built-in help in the meantime: `azuracast_xmltv --help`.
 
 
 ## Fill the gaps between scheduled shows

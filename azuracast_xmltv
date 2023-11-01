@@ -121,10 +121,18 @@
 #     what is described in the item (programme).
 # 2023-10-31 - Moonbase - v0.13.2
 #   - refactor "isodate()" into "rfc3339_date()" -- more reliable datetime strings
+# 2023-11-01 - Moonbase - v0.14.0
+#   - add aggregate M3U per server "<domain>.m3u", allows easier integration
+#     of ALL stations in programs like Jellyfin, KODI, Hypnotix, etc.
+#   - add --group option; overrides M3U "group-title" from station name
+#     to something like "Radio-DE", for easier integration into other lists,
+#     or just keeping your stations together.
+#   - some code cleanup, mainly urljoin(), and more PEP8
+#   - '/xmltv' server path now configurable. For interoperability, YOU SHOULDN'T.
 
 # version info
 import sys
-__version_info__ = ('0', '13', '2')
+__version_info__ = ('0', '14', '0')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -144,7 +152,7 @@ instance_url = 'https://demo.azuracast.com'
 # us a language code permitted by the W3C for use in HTML
 language = "en"
 
-# EPG programme category to list (i.e. "Music", "Talk", ...)
+# EPG/RSS programme category to list (i.e. "Music", "Talk", ...)
 category = 'Music'
 
 # "Moustache-type" variables that can be used when generating programmes:
@@ -202,7 +210,8 @@ category = 'Music'
 requests_enabled_title = "{playlist} (requests enabled)"
 # this will be used as a programme's subtitle
 requests_enabled_subtitle = "Your favorite station. YOUR music."
-# this will be appended to a programme's description, maybe use starting newline(s)
+# this will be appended to a programme's description, maybe use starting
+# newline(s)
 requests_enabled_description = """
 
 Request lines open! Make this program YOURS by adding a request: Go to {request_url}, click on ›Request Song‹ and select your favorite."""
@@ -226,7 +235,8 @@ live_title = "Live: {presenter}"
 # this will be used as a programme's subtitle
 live_subtitle = ""
 # this will be APPENDED to a programme's description
-# REMOVE {comments} if you use that field for internal remarks, else you LEAK INTERNALS!
+# REMOVE {comments} if you use that field for internal remarks, else you
+# LEAK INTERNALS!
 live_description = """
 
 Live Show on {station_name}, hosted by {presenter}.
@@ -274,7 +284,8 @@ rss_feed_description = """<h2>{title}</h2>
 api_key = None
 
 # -p/--public option default:
-# If 'public_only' is True, we will only list stations and mounts marked as public.
+# If 'public_only' is True, we will only list stations and mounts marked
+# as public.
 public_only = False
 
 # -m/--m3u option default:
@@ -282,6 +293,41 @@ public_only = False
 # You WILL need to use the -u/--m3u option to initially create the tuner file,
 # or when you have made changes to the streams in AzuraCast.
 make_m3u = False
+
+# --group option default:
+# M3U "group-title" ('' = Use station name)
+# For later integration into larger lists, use something like "Radio-DE".
+# Some clients (KODI’s IPTV Simple Client) support multiple groups,
+# separated by ";". Example: "My Group;Radio-DE"
+# You CAN use an empty value in multiple groups, which will be filled
+# with your Station Name, i.e.
+#   ";Radio-DE" will expand to "My station;Radio-DE"
+#   "Radio;;Radio-DE" will expand to "Radio;My station;Radio-DE"
+m3u_group_title = ''
+
+# -r/--radio option default
+# Add a 'radio="true"' tag in the M3U’s #EXTINF line for streams
+# whose display name doesn’t contain the word "video".
+# This is for media centers like KODI that can separate Radio & TV streams
+# (if 'radio' is true, the stream will appear in  the "Radio" menu, not "TV")
+add_radio_tag = True
+# list of words in stream display name
+# that will EXCLUDE a stream from getting the 'radio="true"' #EXTINF tag.
+# Comparison is done in "casefold" mode, i.e. case-insensitively,
+# with characters like the German "ß" expanded to "ss".
+# Example:
+#   "Nite Radio (128kbps MP3)" will be listed as "Radio" in KODI
+#   "Nite Radio Video Stream" will be listed as "TV" in KODI
+# Including the file extensions is for people that don't change default
+# stream names.
+videostream_keywords = ['Video', 'TV', 'Testbild',
+                        'mpeg', 'mpg', 'm2t', 'm2ts', 'ts']
+
+# -t/--tvgurl option default.
+# Add 'url-tvg' and 'x-tvg-url' tags to M3U files?
+# Only makes sense if files are available under '/xmltv' on your AzuraCast server,
+# i.e. like 'https://example.com/xmltv/example.com.xml'.
+add_tvg_url = False
 
 # -i/--icon option default:
 # You can provide a channel icon, for example from the station's web page.
@@ -307,33 +353,11 @@ num_days = 7
 # Fill gaps in a station's programmes (True/False)?
 fill_gaps = False
 
-# -t/--tvgurl option default.
-# Add 'url-tvg' and 'x-tvg-url' tags to M3U files?
-# Only makes sense if files are available under '/xmltv' on your AzuraCast server,
-# i.e. like 'https://example.com/xmltv/example.com.xml'.
-add_tvg_url = False
-
 # -g/--gzip option default
 # This will create an additional gzip-compressed (.gz) version of the XML EPG file.
-# Many clients support thus format, and it speeds up transmission to the clients.
+# Many clients support thus format, and it speeds up transmission to the
+# clients.
 add_gzip = True
-
-# -r/--radio option default
-# Add a 'radio="true"' tag in the M3U’s #EXTINF line for streams
-# whose display name doesn’t contain the word "video".
-# This is for media centers like KODI that can separate Radio & TV streams
-# (if 'radio' is true, the stream will appear in  the "Radio" menu, not "TV")
-add_radio_tag = True
-# list of words in stream display name
-# that will EXCLUDE a stream from getting the 'radio="true"' #EXTINF tag.
-# Comparison is done in "casefold" mode, i.e. case-insensitively,
-# with characters like the German "ß" expanded to "ss".
-# Example:
-#   "Nite Radio (128kbps MP3)" will be listed as "Radio" in KODI
-#   "Nite Radio Video Stream" will be listed as "TV" in KODI
-# Including the file extensions is for people that don't change default stream names.
-videostream_keywords = ['Video', 'TV', 'Testbild',
-                        'mpeg', 'mpg', 'm2t', 'm2ts', 'ts']
 
 # --rss option default:
 # Create/update RSS Feeds (one per station plus an aggregated one for ALL stations)
@@ -342,6 +366,9 @@ videostream_keywords = ['Video', 'TV', 'Testbild',
 make_rss = False
 
 # *** END OF USER CONFIGURABLE DEFAULTS -- DO NOT MODIFY ANYTHING BELOW ***
+
+# XMLTV server path -- DO NOT CHANGE!
+xmltv_path = '/xmltv'
 
 
 def eprint(*args, **kwargs):
@@ -369,6 +396,17 @@ except Exception as error:
     exit(1)
 
 
+def urljoin(*args):
+    """Safely join parts of an URL"""
+    # remove "None" args, convert others to str and strip
+    args = [str(x).strip() for x in args if x is not None]
+    # save trailing slash
+    trailing_slash = '/' if args[-1].endswith('/') else ''
+    # remove extra "/" and join to path
+    return "/".join(filter(None, [x.strip("/")
+                    for x in args])) + trailing_slash
+
+
 class azuracast_api():
     """AzuraCast API interface"""
 
@@ -388,7 +426,7 @@ class azuracast_api():
     def get(self, endpoint, params={}, quit_on_error=False):
         try:
             response = requests.get(
-                self.instance_url + '/api' + endpoint,
+                urljoin(self.instance_url, '/api', endpoint),
                 headers=self.headers,
                 params=params,
                 timeout=self.timeout)
@@ -448,14 +486,15 @@ def is_video(name, keywords):
     is_video = False
 
     # see if any of the words in the stream name match a "video stream" keyword
-    words = re.findall('(\w+)', name.casefold())
+    words = re.findall('(\\w+)', name.casefold())
     for word in words:
         if word in keywords:
             is_video = True
     return is_video
 
 
-def get_stations(api, channel_icon_url='', public_only=True, videostream_keywords=[]):
+def get_stations(api, channel_icon_url='', public_only=True,
+                 videostream_keywords=[]):
     """Get station info from this instance"""
     stations = []
 
@@ -465,12 +504,13 @@ def get_stations(api, channel_icon_url='', public_only=True, videostream_keyword
         # get station's default album art; we use this as station logo
         # we use a little trick here by requesting the artwork for non-existing medium "0",
         # which will cause AzuraCast to look up station branding and
-        # instance branding for a replacement. It returns the actual image, not a URL.
+        # instance branding for a replacement. It returns the actual image, not
+        # a URL.
         if channel_icon_url:
             channel_icon = channel_icon_url
         else:
-            channel_icon = api.instance_url + \
-                '/api/station/' + str(station["id"]) + '/art/0'
+            channel_icon = urljoin(
+                api.instance_url, '/api/station/', station["id"], '/art/0')
         s = {
             "id": station["id"],
             "channel_id": sanitize(station["shortcode"]) + '.' + urlparse(instance_url).hostname,
@@ -494,7 +534,11 @@ def get_stations(api, channel_icon_url='', public_only=True, videostream_keyword
 
             # get mount info, to include otherwise invisible mounts
             rm = api.get(
-                '/station/' + str(station["id"]) + '/mounts', quit_on_error=True)
+                urljoin(
+                    '/station/',
+                    station["id"],
+                    '/mounts'),
+                quit_on_error=True)
 
             for mount in rm:
                 m = {
@@ -502,9 +546,10 @@ def get_stations(api, channel_icon_url='', public_only=True, videostream_keyword
                     "name": mount["display_name"],
                     "is_public": mount["is_public"],
                     "is_default": mount["is_default"],
-                    "is_video": is_video(mount["display_name"], videostream_keywords),
-                    "url": mount["links"]["listen"]
-                }
+                    "is_video": is_video(
+                        mount["display_name"],
+                        videostream_keywords),
+                    "url": mount["links"]["listen"]}
                 if public_only:
                     if mount["is_public"]:
                         s["mounts"].append(m)
@@ -514,7 +559,7 @@ def get_stations(api, channel_icon_url='', public_only=True, videostream_keyword
             # get playlist info, to later show if listener requests are allowed
             # in the programme items
             rp = api.get(
-                '/station/' + str(station["id"]) + '/playlists')
+                urljoin('/station/', station["id"], '/playlists'))
 
             for playlist in rp:
                 p = {
@@ -539,7 +584,7 @@ def get_stations(api, channel_icon_url='', public_only=True, videostream_keyword
 
             # get streamer info, to include image in programme's presenter info
             rs = api.get(
-                '/station/' + str(station["id"]) + '/streamers')
+                urljoin('/station/', station["id"], '/streamers'))
 
             for streamer in rs:
                 dj = {
@@ -566,7 +611,7 @@ def get_stations(api, channel_icon_url='', public_only=True, videostream_keyword
                 }
                 s["mounts"].append(m)
 
-        if station["hls_enabled"] == True:
+        if station["hls_enabled"]:
             # HLS has no "is_default", we simply set it to False
             m = {
                 "name": station["name"] + " (HLS)",
@@ -591,28 +636,68 @@ def get_stations(api, channel_icon_url='', public_only=True, videostream_keyword
     return stations
 
 
-def create_m3u(instance_url, station, output_folder='', add_tvg_url=False, add_radio_tag=False):
+def create_m3u(instance_url, station, groups, output_folder='',
+               add_tvg_url=False, add_radio_tag=False):
     """Create an M3U playlist for a single station"""
 
     # create outfile from folder + station shortname + '.m3u'
     outfile = os.path.join(
-        output_folder, sanitize(station["shortcode"])+".m3u")
+        output_folder, sanitize(station["shortcode"]) + ".m3u")
+    print(f"Writing XMLTV Tuner file (M3U playlist): {outfile}")
+
+    with open(outfile, 'w') as f:
+        if add_tvg_url:
+            # -t/-tvgurl option: add links to the EPG on the '#EXTM3U' line;
+            # MUST be reachable under /xmltv
+            tvg_url = urljoin(instance_url, xmltv_path,
+                              urlparse(instance_url).hostname + '.xml')
+            f.write(f'#EXTM3U url-tvg="{tvg_url}" x-tvg-url="{tvg_url}"\n')
+        else:
+            # no links
+            f.write('#EXTM3U\n')
+
+        # build "group-title": supports ";"-delimited multiple groups
+        # empty group replaced by station name
+        groups = ";".join([g.strip() or station["name"]
+                          for g in groups.split(";")])
+
+        for mount in station["mounts"]:
+            radio_tag = 'radio="true" ' if add_radio_tag and not mount["is_video"] else ''
+            f.write(
+                f'#EXTINF:-1 tvg-name="{mount["name"]}" tvg-id="{station["channel_id"]}" group-title="{groups}" {radio_tag}tvg-logo="{station["icon"]}",{mount["name"]}\n')
+            f.write(mount['url'] + '\n')
+
+
+def create_m3u_all(instance_url, stations, groups,
+                   output_folder='', add_tvg_url=False, add_radio_tag=False):
+    """Create an M3U playlist for all stations"""
+
+    # create outfile from folder + domain.name + '.m3u'
+    outfile = os.path.join(output_folder, urlparse(
+        instance_url).hostname + '.m3u')
     print(f"Writing XMLTV Tuner file (M3U playlist): {outfile}")
 
     with open(outfile, 'w') as f:
         if add_tvg_url:
             # -t/-tvgurl option: add links to the EPG on the '#EXTM3U' line; MUST be reachable under /xmltv
-            tvg_url = instance_url + '/xmltv/' + \
-                urlparse(instance_url).hostname+'.xml'
+            tvg_url = urljoin(instance_url, xmltv_path,
+                              urlparse(instance_url).hostname + '.xml')
             f.write(f'#EXTM3U url-tvg="{tvg_url}" x-tvg-url="{tvg_url}"\n')
         else:
             # no links
             f.write('#EXTM3U\n')
-        for mount in station["mounts"]:
-            radio_tag = 'radio="true" ' if add_radio_tag and not mount["is_video"] else ''
-            f.write(
-                f'#EXTINF:-1 tvg-name="{mount["name"]}" tvg-id="{station["channel_id"]}" group-title="{station["name"]}" {radio_tag}tvg-logo="{station["icon"]}",{mount["name"]}\n')
-            f.write(mount['url']+'\n')
+
+        for station in stations:
+            # build "group-title": supports ";"-delimited multiple groups
+            # empty group replaced by station name
+            group_title = ";".join([g.strip() or station["name"]
+                                   for g in groups.split(";")])
+
+            for mount in station["mounts"]:
+                radio_tag = 'radio="true" ' if add_radio_tag and not mount["is_video"] else ''
+                f.write(
+                    f'#EXTINF:-1 tvg-name="{mount["name"]}" tvg-id="{station["channel_id"]}" group-title="{group_title}" {radio_tag}tvg-logo="{station["icon"]}",{mount["name"]}\n')
+                f.write(mount['url'] + '\n')
 
 
 def create_gap_fillers(station, programmes):
@@ -690,7 +775,8 @@ def create_gap_fillers(station, programmes):
 
             gaps.append(p)
 
-        # need to advance 'now' only if the next end time is past the current end time
+        # need to advance 'now' only if the next end time is past the current
+        # end time
         now = max(pair['stop'], now)
 
     return gaps
@@ -702,7 +788,7 @@ def rfc3339_date(dt, utc_z=False):
         utc_z=True outputs "Z" instead of "+00:00" for UTC datetimes."""
 
     if dt.tzinfo is None:
-        suffix = "-00:00" # unknown offset, naive dt
+        suffix = "-00:00"  # unknown offset, naive dt
     else:
         # use "%z" because "%:z" not yet supported everywhere
         suffix = dt.strftime("%z")
@@ -735,7 +821,7 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
         "end": end
     }
     r = api.get(
-        '/station/' + str(station["id"]) + '/schedule', params=params)
+        urljoin('/station/', station["id"], '/schedule'), params=params)
     if api.fail():
         return programmes
 
@@ -744,23 +830,27 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
             "id": r_pgm["id"],
             "type": r_pgm["type"],
             "channel": station["channel_id"],
-            "start": dt.datetime.strptime(r_pgm["start"], "%Y-%m-%dT%H:%M:%S%z").astimezone().strftime("%Y%m%d%H%M%S %z"),
-            "stop": dt.datetime.strptime(r_pgm["end"], "%Y-%m-%dT%H:%M:%S%z").astimezone().strftime("%Y%m%d%H%M%S %z"),
+            "start": dt.datetime.strptime(
+                r_pgm["start"],
+                "%Y-%m-%dT%H:%M:%S%z").astimezone().strftime("%Y%m%d%H%M%S %z"),
+            "stop": dt.datetime.strptime(
+                r_pgm["end"],
+                "%Y-%m-%dT%H:%M:%S%z").astimezone().strftime("%Y%m%d%H%M%S %z"),
             "title": r_pgm["title"],
             "sub-title": "",
             "desc": r_pgm["description"],
             "category": category,
-            "credits": []
-        }
+            "credits": []}
 
         # try to enrich programme with playlist info
         if r_pgm["type"] == "playlist":
             # Find the CORRECT playlist if more than one playlist has the same name
             # Playlist Name and Schedule ID must match.
-            pl = next(
-                (item for item in station["playlists"] if item["name"] == r_pgm["name"] and r_pgm["id"] in item["schedule_ids"]), None)
+            pl = next((item for item in station["playlists"] if item["name"]
+                       == r_pgm["name"] and r_pgm["id"] in item["schedule_ids"]), None)
 
-            # playlist has listener requests enabled, enrich title, sub-title, and description
+            # playlist has listener requests enabled, enrich title, sub-title,
+            # and description
             if pl and pl["include_in_requests"]:
                 replacers = {
                     "{playlist}": pl["name"],
@@ -800,7 +890,8 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
         if r_pgm["type"] == "streamer":
             # try to find the corresponding streamer by name (sadly, no ID)
             dj = next(
-                (item for item in station["streamers"] if item["name"] == r_pgm["name"]), None)
+                (item for item in station["streamers"] if item["name"] == r_pgm["name"]),
+                None)
 
             if dj:
                 # found the streamer, use their info (and image)
@@ -873,24 +964,28 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
     return programmes
 
 
-def create_xmltv(instance_url, stations, programmes, output_folder='', add_gzip=False):
+def create_xmltv(instance_url, stations, programmes,
+                 output_folder='', add_gzip=False):
     """Create an XMLTV EPG for all stations"""
 
     # create outfile from folder + domain.name + '.xml'
     outfile = os.path.join(output_folder, urlparse(
-        instance_url).hostname+'.xml')
+        instance_url).hostname + '.xml')
     print(f"Writing XMLTV EPG file: {outfile}")
 
     # set up the root
     date = dt.datetime.now().astimezone().strftime("%Y%m%d%H%M%S %z")
 
-    root = et.Element("tv",
-                      attrib={"date": date,
-                              "source-info-url": instance_url,
-                              "source-info-name": urlparse(instance_url).netloc,
-                              "generator-info-name": APPNAME + ' ' + VERSION,
-                              "generator-info-url": APPURL
-                              })
+    root = et.Element(
+        "tv",
+        attrib={
+            "date": date,
+            "source-info-url": instance_url,
+            "source-info-name": urlparse(instance_url).netloc,
+            "generator-info-name": APPNAME +
+            ' ' +
+            VERSION,
+            "generator-info-url": APPURL})
 
     # set up the channels
     for station in stations:
@@ -923,7 +1018,8 @@ def create_xmltv(instance_url, stations, programmes, output_folder='', add_gzip=
 
             # see if we have a presenter in credits
             presenter = next(
-                (item["presenter"] for item in r_pgm["credits"] if item.get("presenter")), None)
+                (item["presenter"] for item in r_pgm["credits"] if item.get("presenter")),
+                None)
             if presenter:
                 # add presenter credit and image (if available)
                 credit = et.SubElement(credits, "presenter")
@@ -943,7 +1039,7 @@ def create_xmltv(instance_url, stations, programmes, output_folder='', add_gzip=
     # create gzip-compressed (.gz) file if requested
     if add_gzip:
         infile = os.path.join(output_folder, urlparse(
-            instance_url).hostname+'.xml')
+            instance_url).hostname + '.xml')
         outfile = infile + '.gz'
         print(f"Writing XMLTV EPG gzip file: {outfile}")
 
@@ -960,7 +1056,8 @@ def linkify_urls(text):
     "Liberal Regex Pattern for Any URLs"
     """
     urls = re.compile(
-        r"(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))", re.MULTILINE | re.UNICODE)
+        r"(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))",
+        re.MULTILINE | re.UNICODE)
     text = urls.sub(r'<a href="\1" target="_blank">\1</a>', text)
     return text
 
@@ -970,7 +1067,7 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
 
     # create outfile from folder + station shortname + '.rss'
     outfile = os.path.join(
-        output_folder, sanitize(station["shortcode"])+".rss")
+        output_folder, sanitize(station["shortcode"]) + ".rss")
     print(f"Writing RSS Feed file: {outfile}")
 
     # set up the root
@@ -990,8 +1087,8 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
     # set up the channel
     channel = et.SubElement(root, "channel")
 
-    self_url = instance_url + '/xmltv/' + \
-        sanitize(station["shortcode"]) + ".rss"
+    self_url = urljoin(instance_url, xmltv_path,
+                       sanitize(station["shortcode"]) + '.rss')
     et.SubElement(channel, "{http://www.w3.org/2005/Atom}link", attrib={
         "href": self_url,
         "rel": "self",
@@ -1016,7 +1113,8 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
         et.SubElement(channel, "category").text = category
 
     # set <fh:complete/> to indicate this feed is "the complete set"
-    # and the feed reader should ignore other, previously downloaded historic data
+    # and the feed reader should ignore other, previously downloaded historic
+    # data
     et.SubElement(channel, "{http://purl.org/syndication/history/1.0}complete")
 
     # fetch programmes of this station (by channel_id)
@@ -1095,24 +1193,32 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
         start = rfc3339_date(start_dt, utc_z=True)
         end = rfc3339_date(stop_dt, utc_z=True)
         et.SubElement(
-            item, "{http://purl.org/dc/terms/}valid").text = f"start={start}; end={end}; scheme=W3C-DTF"
+            item,
+            "{http://purl.org/dc/terms/}valid").text = f"start={start}; end={end}; scheme=W3C-DTF"
 
-        # media:... elements: Put all streams and the player link in a media group
+        # media:... elements: Put all streams and the player link in a media
+        # group
         media_group = et.SubElement(
             item, "{http://search.yahoo.com/mrss/}group")
         # iterate over credits, trying to find a presenter image
         # else use station icon instead
-        thumbnail = next((item["presenter"]["image"] for item in r_pgm["credits"] if item.get(
-            "presenter", {}).get("image")), station["icon"])
+        thumbnail = next(
+            (item["presenter"]["image"] for item in r_pgm["credits"] if item.get(
+                "presenter", {}).get("image")), station["icon"])
         if thumbnail:
             et.SubElement(
-                media_group, "{http://search.yahoo.com/mrss/}thumbnail", attrib={"url": thumbnail})
+                media_group,
+                "{http://search.yahoo.com/mrss/}thumbnail",
+                attrib={
+                    "url": thumbnail})
 
-        et.SubElement(media_group, "{http://search.yahoo.com/mrss/}player", attrib={
-            "url": station["public_player_url"],
-            "width": "800",
-            "height": "450"
-        })
+        et.SubElement(
+            media_group,
+            "{http://search.yahoo.com/mrss/}player",
+            attrib={
+                "url": station["public_player_url"],
+                "width": "800",
+                "height": "450"})
 
         for mount in station["mounts"]:
             url = mount["url"]
@@ -1121,16 +1227,20 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
             expression = "nonstop"  # stream
             title = mount["name"]  # type="plain", stream name
 
-            media_content = et.SubElement(media_group, "{http://search.yahoo.com/mrss/}content", attrib={
-                "url": url,
-                "medium": medium,
-                "isDefault": "true" if is_default else "false",
-                "expression": expression,
-                "lang": language
-            })
-            # sadly, not many readers use this yet; it should provide the mount name as title of the media:content
-            et.SubElement(
-                media_content, "{http://search.yahoo.com/mrss/}title", attrib={"type": "plain"}).text = title
+            media_content = et.SubElement(
+                media_group,
+                "{http://search.yahoo.com/mrss/}content",
+                attrib={
+                    "url": url,
+                    "medium": medium,
+                    "isDefault": "true" if is_default else "false",
+                    "expression": expression,
+                    "lang": language})
+            # sadly, not many readers use this yet; it should provide the mount
+            # name as title of the media:content
+            et.SubElement(media_content,
+                          "{http://search.yahoo.com/mrss/}title",
+                          attrib={"type": "plain"}).text = title
 
     with et.xmlfile(outfile, encoding="UTF-8") as xf:
         xf.write_declaration()
@@ -1187,14 +1297,21 @@ class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter):
         # if 'replace_whitespace=False' is used, textwrap makes a mess
         # we need to call it line by line
         for line in lines:
-            new.append('\n'.join(textwrap.wrap(line, width, initial_indent=indent,
-                       subsequent_indent=indent, replace_whitespace=False)))
+            new.append(
+                '\n'.join(
+                    textwrap.wrap(
+                        line,
+                        width,
+                        initial_indent=indent,
+                        subsequent_indent=indent,
+                        replace_whitespace=False)))
         return '\n'.join(new)
 
 
-parser = argparse.ArgumentParser(description='Create XMLTV Tuner and EPG files from an AzuraCast Web Radio.',
-                                 epilog=f"""
-%(prog)s can create XMLTV M3U Tuner files and XML EPG files for both your own and other AzuraCast stations.
+parser = argparse.ArgumentParser(
+    description='Create XMLTV Tuner, EPG and RSS Feed files from an AzuraCast Web Radio.',
+    epilog=f"""
+%(prog)s can create XMLTV M3U Tuner, XML EPG and RSS 2.0 Feed files for both your own and other AzuraCast stations.
 
 For much better programme data to be generated, create an AzuraCast API key and use the -a/--apikey option, which allows:
   - using otherwise invisible mounts, like an added video stream,
@@ -1202,42 +1319,100 @@ For much better programme data to be generated, create an AzuraCast API key and 
   - adding a presenter image on live shows, and (mis-)using the streamer comment field as a description
   - showing extra info for syndicated content (remote playlists)
 
-The -t/--tvgurl option adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner files. This helps media center software like KODI to automatically locate the corresponding EPG data file, but only works if the generated M3U and XML files are available under the '/xmltv' path of your AzuraCast server.
+--group GROUP modifies the 'group-title' in M3U Tuner files. It normally contains the station name. Using this, you can group all stations of an AzuraCast server under a common name, or use something like 'Radio-DE' to merge with larger, existing lists. A very few clients like KODI support multiple groups. Separate these with a semicolon ';'. Empty values will be replaced by the station name: ';Radio-DE' --> 'Your Station;Radio-DE', 'Radio;;Radio-DE' --> 'Radio;Your Station;Radio-DE'.
+
+-r/--radio adds a 'radio="true"' tag to the M3U #EXTINF lines, if a stream’s display name doesn’t contain any of the words {', '.join("'"+k+"'" for k in videostream_keywords)} (you can customize this list).
+This is for software like KODI, which can distinguish between Radio and TV channels and displays these in separate menus.
+
+-t/--tvgurl adds 'url-tvg' and 'x-tvg-url' tags to the M3U Tuner files. This helps media center software like KODI to automatically locate the corresponding EPG data file, but only works if the generated M3U and XML files are available under the '{xmltv_path}' path of your AzuraCast server.
 See installation instructions at {APPURL}.
 
-The -r/--radio option adds a 'radio="true"' tag to the M3U #EXTINF lines, if a stream’s display name doesn’t contain any of the words {', '.join("'"+k+"'" for k in videostream_keywords)} (you can customize this list).
-This is for software like KODI, which can distinguish between Radio and TV channels and displays these in separate menus.
+Output files are named after the (sanitized) station shortcode ("URL Stub" in AzuraCast), and the server base URL.
 
 Edit '{argparse._sys.argv[0]}' using a text editor to change some defaults near the top of the file. No worries, everything is well documented.
 
 Please report any issues to {APPURL}/issues.""",
-                                 formatter_class=CustomFormatter)
+    formatter_class=CustomFormatter)
 parser.add_argument('-v', '--version', action='version',
                     version='%(prog)s ' + __version__)
 parser.add_argument('-u', '--url', type=my_url, default=instance_url,
                     help='base URL to an AzuraCast instance')
-parser.add_argument('-i', '--icon', metavar='URL', type=my_url_path, default=channel_icon_url,
-                    help='URL to a channel icon; will use station\'s default album art if omitted')
-parser.add_argument('-c', '--customplayer', metavar='URL', type=my_url_path, default=custom_player_url,
-                    help='URL to a custom web player; modifies {player_url} and {request_url} variables')
-parser.add_argument('-d', '--days', type=int, minimum=1, maximum=30, action=Range, default=num_days,
-                    help='number of days in the future [%(min)d-%(max)d] to include in the EPG')
-parser.add_argument('-f', '--fillgaps', action='store_true',
-                    default=fill_gaps, help='fill gaps between programmes with a \'General Rotation\' entry')
-parser.add_argument('-o', '--output', metavar='FOLDER', type=my_path,
-                    default=output_folder, help='output folder for XMLTV files')
-parser.add_argument('-a', '--apikey', default=api_key,
-                    help='AzuraCast API key; allows creating much better EPG data, see below')
-parser.add_argument('-p', '--public', action='store_true',
-                    default=public_only, help='include only public stations & streams')
-parser.add_argument('-m', '--m3u', action='store_true', default=make_m3u,
-                    help='create M3U XMLTV Tuner file(s); only needed on first run or after changes in AzuraCast')
-parser.add_argument('-r', '--radio', action='store_true', default=add_radio_tag,
-                    help='add \'radio="true"\' tags to M3U #EXTINF; allows distinction between radio and TV channels (see below)')
-parser.add_argument('-t', '--tvgurl', action='store_true', default=add_tvg_url,
-                    help='add \'tvg-url\' tags to M3U file; allows software to find the corresponding EPG automatically (see below)')
-parser.add_argument('-g', '--gzip', action='store_true', default=add_gzip,
-                    help='additionally output a gzip-compressed (.gz) version of the EPG XML file; many clients can use this format, and it reduces transmission time and bandwidth')
+parser.add_argument(
+    '-i',
+    '--icon',
+    metavar='URL',
+    type=my_url_path,
+    default=channel_icon_url,
+    help='URL to a channel icon; will use station\'s default album art if omitted')
+parser.add_argument(
+    '-c',
+    '--customplayer',
+    metavar='URL',
+    type=my_url_path,
+    default=custom_player_url,
+    help='URL to a custom web player; modifies {player_url} and {request_url} variables')
+parser.add_argument(
+    '-d',
+    '--days',
+    type=int,
+    minimum=1,
+    maximum=30,
+    action=Range,
+    default=num_days,
+    help='number of days in the future [%(min)d-%(max)d] to include in the EPG')
+parser.add_argument(
+    '-f',
+    '--fillgaps',
+    action='store_true',
+    default=fill_gaps,
+    help='fill gaps between programmes with a \'General Rotation\' entry')
+parser.add_argument(
+    '-o',
+    '--output',
+    metavar='FOLDER',
+    type=my_path,
+    default=output_folder,
+    help='output folder for XMLTV files')
+parser.add_argument(
+    '-a',
+    '--apikey',
+    default=api_key,
+    help='AzuraCast API key; allows creating much better EPG data, see below')
+parser.add_argument(
+    '-p',
+    '--public',
+    action='store_true',
+    default=public_only,
+    help='include only public stations & streams')
+parser.add_argument(
+    '-m',
+    '--m3u',
+    action='store_true',
+    default=make_m3u,
+    help='create M3U XMLTV Tuner file(s); only needed on first run or after changes in AzuraCast')
+parser.add_argument(
+    '--group',
+    type=str,
+    default=m3u_group_title,
+    help='set M3U \'group-title\' to something other than station name (see below)')
+parser.add_argument(
+    '-r',
+    '--radio',
+    action='store_true',
+    default=add_radio_tag,
+    help='add \'radio="true"\' tags to M3U #EXTINF; allows distinction between radio and TV channels (see below)')
+parser.add_argument(
+    '-t',
+    '--tvgurl',
+    action='store_true',
+    default=add_tvg_url,
+    help='add \'tvg-url\' tags to M3U file; allows software to find the corresponding EPG automatically (see below)')
+parser.add_argument(
+    '-g',
+    '--gzip',
+    action='store_true',
+    default=add_gzip,
+    help='additionally output a gzip-compressed (.gz) version of the EPG XML file; many clients can use this format, and it reduces transmission time and bandwidth')
 parser.add_argument('--rss', action='store_true', default=make_rss,
                     help='create/update RSS 2.0 Feed(s); one feed per station')
 
@@ -1256,19 +1431,35 @@ fill_gaps = args.fillgaps
 add_radio_tag = args.radio
 add_tvg_url = args.tvgurl
 add_gzip = args.gzip
+m3u_group_title = args.group
 
 # Init the AzuraCast API
 api = azuracast_api(instance_url, api_key)
 
 # Get stations from this AzuraCast instance
 stations = get_stations(
-    api, channel_icon_url=channel_icon_url, public_only=public_only, videostream_keywords=videostream_keywords)
+    api,
+    channel_icon_url=channel_icon_url,
+    public_only=public_only,
+    videostream_keywords=videostream_keywords)
 
 # Create M3U playlist files
 if make_m3u:
     for station in stations:
-        create_m3u(instance_url, station,
-                   output_folder=output_folder, add_tvg_url=add_tvg_url, add_radio_tag=add_radio_tag)
+        create_m3u(
+            instance_url,
+            station,
+            m3u_group_title,
+            output_folder=output_folder,
+            add_tvg_url=add_tvg_url,
+            add_radio_tag=add_radio_tag)
+    create_m3u_all(
+        instance_url,
+        stations,
+        m3u_group_title,
+        output_folder=output_folder,
+        add_tvg_url=add_tvg_url,
+        add_radio_tag=add_radio_tag)
 
 # Get schedules from all stations
 programmes = []
@@ -1284,4 +1475,3 @@ if make_rss:
     for station in stations:
         create_rss_station(instance_url, station, programmes,
                            output_folder=output_folder)
-    # TODO: Create aggregate RSS for all stations
