@@ -1319,7 +1319,7 @@ For much better programme data to be generated, create an AzuraCast API key and 
   - adding a presenter image on live shows, and (mis-)using the streamer comment field as a description
   - showing extra info for syndicated content (remote playlists)
 
---group GROUP modifies the 'group-title' in M3U Tuner files. It normally contains the station name. Using this, you can group all stations of an AzuraCast server under a common name, or use something like 'Radio-DE' to merge with larger, existing lists. A very few clients like KODI support multiple groups. Separate these with a semicolon ';'. Empty values will be replaced by the station name: ';Radio-DE' --> 'Your Station;Radio-DE', 'Radio;;Radio-DE' --> 'Radio;Your Station;Radio-DE'.
+--group GROUP modifies the 'group-title' in M3U Tuner files. It normally contains the station name. Using this, you can group all stations of an AzuraCast server under a common name, or use something like 'Radio-DE' to merge with larger, existing lists. A very few clients, like KODI, support multiple groups. Separate these with a semicolon ';'. Empty values will be replaced by the station name: ';Radio-DE' --> 'Your Station;Radio-DE', 'Radio;;Radio-DE' --> 'Radio;Your Station;Radio-DE'.
 
 -r/--radio adds a 'radio="true"' tag to the M3U #EXTINF lines, if a stream’s display name doesn’t contain any of the words {', '.join("'"+k+"'" for k in videostream_keywords)} (you can customize this list).
 This is for software like KODI, which can distinguish between Radio and TV channels and displays these in separate menus.

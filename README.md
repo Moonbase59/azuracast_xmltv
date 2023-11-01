@@ -247,7 +247,7 @@ comment field as a description
 --group GROUP modifies the 'group-title' in M3U Tuner files. It normally
 contains the station name. Using this, you can group all stations of an
 AzuraCast server under a common name, or use something like 'Radio-DE' to
-merge with larger, existing lists. A very few clients like KODI support
+merge with larger, existing lists. A very few clients, like KODI, support
 multiple groups. Separate these with a semicolon ';'. Empty values will be
 replaced by the station name: ';Radio-DE' --> 'Your Station;Radio-DE',
 'Radio;;Radio-DE' --> 'Radio;Your Station;Radio-DE'.
