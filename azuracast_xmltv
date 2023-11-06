@@ -15,7 +15,7 @@
 #
 # Mounts are important for the M3U playlist files, though.
 # We will create one M3U playlist file per station (good for resellers,
-# or if you want to publicize only certain stations).
+# or if you want to publicize only certain stations), plus an overall one.
 
 # 2023-10-15 - Moonbase59 - initial public version
 # 2023-10-16 - Moonbase59 - v0.3.1
@@ -129,10 +129,20 @@
 #     or just keeping your stations together.
 #   - some code cleanup, mainly urljoin(), and more PEP8
 #   - '/xmltv' server path now configurable. For interoperability, YOU SHOULDN'T.
+# 2023-11-06 - Moonbase - v0.15.0
+#   - tested & fixed some edge cases like stations w/o mounts (HLS-only),
+#     stations w/ broadcasting or public pages disabled,
+#     stations w/ no streams at all (no mounts, no HLS),
+#     stations w/ nothing on schedule.
+#   - fix unneeded abort on API errors (api.get returns empty list now)
+#   - add api.verify() to check we’re actually accessing an AzuraCast server,
+#     avoids producing useless files
+#   - other minor code cleanup, unified error messages
+#   - re-arrange #EXTINF for better human readability (Name Group Radio? ID Logo)
 
 # version info
 import sys
-__version_info__ = ('0', '14', '0')
+__version_info__ = ('0', '15', '0')
 __version__ = '.'.join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -371,9 +381,13 @@ make_rss = False
 xmltv_path = '/xmltv'
 
 
-def eprint(*args, **kwargs):
-    """print error messages to stderr"""
-    print(*args, file=sys.stderr, **kwargs)
+import os
+
+ME = os.path.basename(sys.argv[0])
+
+def errprint(*args, **kwargs):
+    """Print error messages to stderr, nicely"""
+    print(ME + ":", "error:", *args, file=sys.stderr, **kwargs)
 
 
 # try importing everything upfront (no lazy late imports)
@@ -392,8 +406,8 @@ try:
     import re
     from email import utils  # for RSS Feed dates
 except Exception as error:
-    eprint("Error:", type(error).__name__, "–", error)
-    exit(1)
+    errprint(type(error).__name__, "–", error)
+    sys.exit(1)
 
 
 def urljoin(*args):
@@ -423,7 +437,14 @@ class azuracast_api():
         if api_key:
             self.headers["X-API-Key"] = api_key
 
+    def verify(self):
+        """Verify this is actually an AzuraCast server
+        by checking the /status API endpoint and online state."""
+        response = self.get('/status')
+        return response and response.get("online", False)
+
     def get(self, endpoint, params={}, quit_on_error=False):
+        """Get s/th from an API endpoint; return empty list on error (or quit)"""
         try:
             response = requests.get(
                 urljoin(self.instance_url, '/api', endpoint),
@@ -433,16 +454,17 @@ class azuracast_api():
             self.status_code = response.status_code
             response.raise_for_status()
         except Exception as error:
-            eprint("Error:", type(error).__name__, "–", error)
             if quit_on_error:
-                exit(1)
+                errprint(type(error).__name__, "–", error)
+                sys.exit(1)
             else:
-                return {}
+                # empty list = "nothing" for further processing by caller
+                return []
 
         return response.json()
 
     def fail(self):
-        return self.status_code != 200
+        return self.status_code != requests.codes.ok  # 200
 
 
 def sanitize(name):
@@ -478,7 +500,8 @@ def replace_vars(dictionary, text):
 
 
 def is_video(name, keywords):
-    """Try to determine if a stream is a video stream by using a list of keywords"""
+    """Try to determine if a stream is a video stream
+    by checking a list of keywords"""
 
     # casefold keywords for comparison, just in case
     keywords = [k.casefold() for k in keywords]
@@ -533,12 +556,13 @@ def get_stations(api, channel_icon_url='', public_only=True,
         if api.api_key:
 
             # get mount info, to include otherwise invisible mounts
+            # (silent) HTTPErr 500 if this station has no mounts
+            # (Broadcasting off, HLS-only, etc.) -- api.get will return []
             rm = api.get(
                 urljoin(
                     '/station/',
                     station["id"],
-                    '/mounts'),
-                quit_on_error=True)
+                    '/mounts'))
 
             for mount in rm:
                 m = {
@@ -612,16 +636,18 @@ def get_stations(api, channel_icon_url='', public_only=True,
                 s["mounts"].append(m)
 
         if station["hls_enabled"]:
-            # HLS has no "is_default", we simply set it to False
+            # HLS has no "is_default" (yet), we simply set it to False
             m = {
                 "name": station["name"] + " (HLS)",
                 "url": station["hls_url"],
                 "is_default": False,
                 "is_video": False
             }
+            # future: if API returns "hls_is_default" (False if not)
+            m["is_default"] = station.get("hls_is_default", False)
             s["mounts"].append(m)
 
-        # sort mounts by display name, put default mount at beginning
+        # sort mounts by display name, put default mount(s) at beginning
         # this is intended for players that immediately start playout,
         # and for better human readability
         s["mounts"] = sorted(s["mounts"], key=lambda k: (
@@ -664,7 +690,7 @@ def create_m3u(instance_url, station, groups, output_folder='',
         for mount in station["mounts"]:
             radio_tag = 'radio="true" ' if add_radio_tag and not mount["is_video"] else ''
             f.write(
-                f'#EXTINF:-1 tvg-name="{mount["name"]}" tvg-id="{station["channel_id"]}" group-title="{groups}" {radio_tag}tvg-logo="{station["icon"]}",{mount["name"]}\n')
+                f'#EXTINF:-1 tvg-name="{mount["name"]}" group-title="{groups}" {radio_tag}tvg-id="{station["channel_id"]}" tvg-logo="{station["icon"]}",{mount["name"]}\n')
             f.write(mount['url'] + '\n')
 
 
@@ -695,8 +721,9 @@ def create_m3u_all(instance_url, stations, groups,
 
             for mount in station["mounts"]:
                 radio_tag = 'radio="true" ' if add_radio_tag and not mount["is_video"] else ''
+                # better readable for humans: #EXTINF:-1 Name Group Radio? ID Logo,Name
                 f.write(
-                    f'#EXTINF:-1 tvg-name="{mount["name"]}" tvg-id="{station["channel_id"]}" group-title="{group_title}" {radio_tag}tvg-logo="{station["icon"]}",{mount["name"]}\n')
+                    f'#EXTINF:-1 tvg-name="{mount["name"]}" group-title="{group_title}" {radio_tag}tvg-id="{station["channel_id"]}" tvg-logo="{station["icon"]}",{mount["name"]}\n')
                 f.write(mount['url'] + '\n')
 
 
@@ -822,8 +849,6 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
     }
     r = api.get(
         urljoin('/station/', station["id"], '/schedule'), params=params)
-    if api.fail():
-        return programmes
 
     for r_pgm in r:
         p = {
@@ -1254,7 +1279,7 @@ def my_url(arg):
     url = urlparse(arg)
     if all((url.scheme, url.netloc)):
         return arg
-    raise argparse.ArgumentTypeError('Invalid URL')
+    raise argparse.ArgumentTypeError(f"Invalid URL: '{arg}'")
 
 
 def my_url_path(arg):
@@ -1262,7 +1287,7 @@ def my_url_path(arg):
     url = urlparse(arg)
     if arg == '' or all((url.scheme, url.netloc, url.path)):
         return arg
-    raise argparse.ArgumentTypeError('Invalid URL (requires path)')
+    raise argparse.ArgumentTypeError(f"Invalid URL (path missing): '{arg}'")
 
 
 def my_path(arg):
@@ -1270,7 +1295,7 @@ def my_path(arg):
     arg = os.path.normpath(arg)
     if os.path.isdir(arg):
         return arg
-    raise NotADirectoryError(arg)
+    raise argparse.ArgumentTypeError(f"Not a folder: '{arg}'")
 
 
 class Range(argparse.Action):
@@ -1435,6 +1460,10 @@ m3u_group_title = args.group
 
 # Init the AzuraCast API
 api = azuracast_api(instance_url, api_key)
+# Check if actually talking to a live AzuraCast server
+if not api.verify():
+    errprint(f"Not an AzuraCast server: '{instance_url}'")
+    sys.exit(1)
 
 # Get stations from this AzuraCast instance
 stations = get_stations(

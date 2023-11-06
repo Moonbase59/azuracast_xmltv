@@ -16,7 +16,7 @@ def linkify_urls(text):
     text = urls.sub(r'<a href="\1" target="_blank">\1</a>', text)
     return text
 
-text = """Besuche uns auf https://radio.niteradio.net/public/niteradio.
+text = """Besuche uns auf https://example.com/public/niteradio.
 Oder mail an mailto:moonbase@quantentunnel.de!
 wie wär’s mit www.example.com? Oder so …
 Know what?  A domain like http://موقع.وزارة-الاتصالات.مصر/ is actually legal nowadays!
