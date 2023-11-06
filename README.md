@@ -430,7 +430,7 @@ _You can even use the web player within some feed readers_
 
 The RSS 2.0 Feeds we generate are _standards-compliant_ and usually _validate_ just fine. Some validators have problems with feed items lying in the future, that can safely be ignored.
 
-We use the most _modern technologies_ and the _most compatible_ set of features, so chances are good that a feature _is already there_ when fead-readers finally catch up. Currently, not every feed reader supports all features.
+We use the most _modern technologies_ and the _most compatible_ set of features, so chances are good that a feature _is already there_ when feed readers finally catch up. Currently, not every feed reader supports all features.
 
 
 ## A note on mount point display names
