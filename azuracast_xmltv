@@ -145,9 +145,11 @@
 #     AzuraCast always sets Content-Type=application/json
 #   - switch from AutoPEP8 to black+isort codestyle; much better readable
 #     Makefile included, use 'make format' to re-format code
+# 2023-11-07 - Moonbase - v0.16.1
+#   - harden initial AzuraCast server check.
 
 # version info
-__version_info__ = ("0", "16", "0")
+__version_info__ = ("0", "16", "1")
 __version__ = ".".join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -446,6 +448,27 @@ class azuracast_api:
     def verify(self):
         """Verify this is actually an AzuraCast server
         by checking the /status API endpoint and online state."""
+
+        # Make a HEAD request first, avoiding download of large files
+        # or streams. User input can be erroneous, or even malicious.
+        try:
+            response = requests.head(
+                urljoin(self.instance_url, "/api", "/status"),
+                headers=self.headers,
+                timeout=self.timeout,
+            )
+        except Exception as error:
+            errprint(type(error).__name__, "–", error)
+            sys.exit(1)
+
+        # fail if status != 200 or not JSON
+        if (
+            response.status_code != requests.codes.ok
+            or "application/json" not in response.headers.get("Content-Type", "")
+        ):
+            return False
+
+        # ok so far, do a GET and check if "online" is there and "true"
         response = self.get("/status")
         return response and response.get("online", False)
 
@@ -1549,7 +1572,7 @@ m3u_group_title = args.group
 api = azuracast_api(instance_url, api_key)
 # Check if actually talking to a live AzuraCast server
 if not api.verify():
-    errprint(f"Not an AzuraCast server: '{instance_url}'")
+    errprint(f"No live AzuraCast at: '{instance_url}'")
     sys.exit(1)
 
 # Get stations from this AzuraCast instance
