@@ -139,11 +139,16 @@
 #     avoids producing useless files
 #   - other minor code cleanup, unified error messages
 #   - re-arrange #EXTINF for better human readability (Name Group Radio? ID Logo)
+# 2023-11-06 - Moonbase - v0.16.0
+#   - fix KeyError: 'image' when writing XML live programme and presenter has no image
+#   - also check response Content-Type on API calls, so JSON decoder doesn’t error
+#     AzuraCast always sets Content-Type=application/json
+#   - switch from AutoPEP8 to black+isort codestyle; much better readable
+#     Makefile included, use 'make format' to re-format code
 
 # version info
-import sys
-__version_info__ = ('0', '15', '0')
-__version__ = '.'.join(__version_info__)
+__version_info__ = ("0", "16", "0")
+__version__ = ".".join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
 VERSION = __version__
@@ -156,14 +161,14 @@ APPURL = "https://github.com/Moonbase59/azuracast_xmltv"
 # Use the base URL here, NOT the public player URL!
 # Note: The AzuraCast demo server is reset on the top of every hour,
 # so you might get a CloudFlare Error 521. Just try again a few minutes later.
-instance_url = 'https://demo.azuracast.com'
+instance_url = "https://demo.azuracast.com"
 
 # language used for content description in EPG & RSS
 # us a language code permitted by the W3C for use in HTML
 language = "en"
 
 # EPG/RSS programme category to list (i.e. "Music", "Talk", ...)
-category = 'Music'
+category = "Music"
 
 # "Moustache-type" variables that can be used when generating programmes:
 # Those marked with a * are only available when using an API key,
@@ -313,7 +318,7 @@ make_m3u = False
 # with your Station Name, i.e.
 #   ";Radio-DE" will expand to "My station;Radio-DE"
 #   "Radio;;Radio-DE" will expand to "Radio;My station;Radio-DE"
-m3u_group_title = ''
+m3u_group_title = ""
 
 # -r/--radio option default
 # Add a 'radio="true"' tag in the M3U’s #EXTINF line for streams
@@ -330,8 +335,7 @@ add_radio_tag = True
 #   "Nite Radio Video Stream" will be listed as "TV" in KODI
 # Including the file extensions is for people that don't change default
 # stream names.
-videostream_keywords = ['Video', 'TV', 'Testbild',
-                        'mpeg', 'mpg', 'm2t', 'm2ts', 'ts']
+videostream_keywords = ["Video", "TV", "Testbild", "mpeg", "mpg", "m2t", "m2ts", "ts"]
 
 # -t/--tvgurl option default.
 # Add 'url-tvg' and 'x-tvg-url' tags to M3U files?
@@ -353,7 +357,7 @@ custom_player_url = None
 # -o/--output option default:
 # If you don't want files to be written into the current folder,
 # specify an output folder here. (Empty string, NOT None.)
-output_folder = ''
+output_folder = ""
 
 # -d/--days option default:
 # EPG for how many days?
@@ -378,12 +382,14 @@ make_rss = False
 # *** END OF USER CONFIGURABLE DEFAULTS -- DO NOT MODIFY ANYTHING BELOW ***
 
 # XMLTV server path -- DO NOT CHANGE!
-xmltv_path = '/xmltv'
+xmltv_path = "/xmltv"
 
 
 import os
+import sys
 
 ME = os.path.basename(sys.argv[0])
+
 
 def errprint(*args, **kwargs):
     """Print error messages to stderr, nicely"""
@@ -393,18 +399,18 @@ def errprint(*args, **kwargs):
 # try importing everything upfront (no lazy late imports)
 # because we want to know which modules might be missing on first install
 try:
-    import os
-    import requests
-    import json
-    import lxml.etree as et
-    import datetime as dt
-    from urllib.parse import urlparse
     import argparse
-    import textwrap
+    import datetime as dt
     import gzip
-    import shutil
+    import json
     import re
+    import shutil
+    import textwrap
     from email import utils  # for RSS Feed dates
+    from urllib.parse import urlparse
+
+    import lxml.etree as et
+    import requests
 except Exception as error:
     errprint(type(error).__name__, "–", error)
     sys.exit(1)
@@ -415,24 +421,24 @@ def urljoin(*args):
     # remove "None" args, convert others to str and strip
     args = [str(x).strip() for x in args if x is not None]
     # save trailing slash
-    trailing_slash = '/' if args[-1].endswith('/') else ''
+    trailing_slash = "/" if args[-1].endswith("/") else ""
     # remove extra "/" and join to path
-    return "/".join(filter(None, [x.strip("/")
-                    for x in args])) + trailing_slash
+    return "/".join(filter(None, [x.strip("/") for x in args])) + trailing_slash
 
 
-class azuracast_api():
-    """AzuraCast API interface"""
+class azuracast_api:
+    """AzuraCast API interface, strictly JSON"""
 
-    def __init__(self, instance_url, api_key='', timeout=30):
+    def __init__(self, instance_url, api_key="", timeout=30):
         self.instance_url = instance_url
         self.api_key = api_key
         self.timeout = timeout  # default None = until connection closed
         self.status_code = 0
+        self.content_type = ""  # response content-type
         self.headers = {
             "User-Agent": f"{APPNAME}/{VERSION} +{APPURL}",
             "accept": "application/json",
-            "X-Clacks-Overhead": "GNU Terry Pratchett, Leonard Nimoy"
+            "X-Clacks-Overhead": "GNU Terry Pratchett, Leonard Nimoy",
         }
         if api_key:
             self.headers["X-API-Key"] = api_key
@@ -440,18 +446,20 @@ class azuracast_api():
     def verify(self):
         """Verify this is actually an AzuraCast server
         by checking the /status API endpoint and online state."""
-        response = self.get('/status')
+        response = self.get("/status")
         return response and response.get("online", False)
 
     def get(self, endpoint, params={}, quit_on_error=False):
         """Get s/th from an API endpoint; return empty list on error (or quit)"""
         try:
             response = requests.get(
-                urljoin(self.instance_url, '/api', endpoint),
+                urljoin(self.instance_url, "/api", endpoint),
                 headers=self.headers,
                 params=params,
-                timeout=self.timeout)
+                timeout=self.timeout,
+            )
             self.status_code = response.status_code
+            self.content_type = response.headers.get("Content-Type", "")
             response.raise_for_status()
         except Exception as error:
             if quit_on_error:
@@ -461,26 +469,33 @@ class azuracast_api():
                 # empty list = "nothing" for further processing by caller
                 return []
 
-        return response.json()
+        # response must be JSON (else JSON decoder will throw error)
+        if "application/json" in self.content_type:
+            return response.json()
+        else:
+            return []
 
     def fail(self):
-        return self.status_code != requests.codes.ok  # 200
+        return (
+            self.status_code != requests.codes.ok
+            or "application/json" not in self.content_type
+        )
 
 
 def sanitize(name):
     """Sanitize a station shortname to become RFC2838-compliant"""
     # strip, replace ' ' & '_' with '-' (no '_' allowed in domains)
-    name = name.strip().translate(str.maketrans(' _', '--'))
-    keep = '-.'
+    name = name.strip().translate(str.maketrans(" _", "--"))
+    keep = "-."
     # remove everything that isn't alphanumeric (Unicode-aware) or to be kept
-    return ''.join(c for c in name if c.isalnum() or c in keep)
+    return "".join(c for c in name if c.isalnum() or c in keep)
 
 
 def clean(description):
     """Remove all leftover whitespace from a programme description, not using re"""
     text = description.strip()
     lines = [line.split() for line in text.splitlines()]
-    return '\n'.join(' '.join(word for word in line) for line in lines)
+    return "\n".join(" ".join(word for word in line) for line in lines)
 
 
 def replace_vars(dictionary, text):
@@ -495,7 +510,7 @@ def replace_vars(dictionary, text):
             text = text.replace(variable, dictionary[variable])
         else:
             # replace with an empty string if Falsy (i.e. JSON null from API)
-            text = text.replace(variable, '')
+            text = text.replace(variable, "")
     return text
 
 
@@ -509,19 +524,18 @@ def is_video(name, keywords):
     is_video = False
 
     # see if any of the words in the stream name match a "video stream" keyword
-    words = re.findall('(\\w+)', name.casefold())
+    words = re.findall("(\\w+)", name.casefold())
     for word in words:
         if word in keywords:
             is_video = True
     return is_video
 
 
-def get_stations(api, channel_icon_url='', public_only=True,
-                 videostream_keywords=[]):
+def get_stations(api, channel_icon_url="", public_only=True, videostream_keywords=[]):
     """Get station info from this instance"""
     stations = []
 
-    r = api.get('/stations')
+    r = api.get("/stations")
 
     for station in r:
         # get station's default album art; we use this as station logo
@@ -533,20 +547,25 @@ def get_stations(api, channel_icon_url='', public_only=True,
             channel_icon = channel_icon_url
         else:
             channel_icon = urljoin(
-                api.instance_url, '/api/station/', station["id"], '/art/0')
+                api.instance_url, "/api/station/", station["id"], "/art/0"
+            )
         s = {
             "id": station["id"],
-            "channel_id": sanitize(station["shortcode"]) + '.' + urlparse(instance_url).hostname,
+            "channel_id": sanitize(station["shortcode"])
+            + "."
+            + urlparse(instance_url).hostname,
             "icon": channel_icon,  # not yet from API
             "name": station["name"],
             "shortcode": station["shortcode"],
             "description": station["description"],
             "is_public": station["is_public"],
             "url": station["url"],
-            "public_player_url": custom_player_url if custom_player_url else station["public_player_url"],
+            "public_player_url": custom_player_url
+            if custom_player_url
+            else station["public_player_url"],
             "mounts": [],
             "playlists": [],
-            "streamers": []
+            "streamers": [],
         }
 
         # if an API key is given, we can provide a much richer output, notably:
@@ -554,15 +573,10 @@ def get_stations(api, channel_icon_url='', public_only=True,
         #   - show if listener requests are allowed in programmes (from playlists)
         #   - show presenter info (like a streamer image) in programmes (from streamers)
         if api.api_key:
-
             # get mount info, to include otherwise invisible mounts
             # (silent) HTTPErr 500 if this station has no mounts
             # (Broadcasting off, HLS-only, etc.) -- api.get will return []
-            rm = api.get(
-                urljoin(
-                    '/station/',
-                    station["id"],
-                    '/mounts'))
+            rm = api.get(urljoin("/station/", station["id"], "/mounts"))
 
             for mount in rm:
                 m = {
@@ -570,10 +584,9 @@ def get_stations(api, channel_icon_url='', public_only=True,
                     "name": mount["display_name"],
                     "is_public": mount["is_public"],
                     "is_default": mount["is_default"],
-                    "is_video": is_video(
-                        mount["display_name"],
-                        videostream_keywords),
-                    "url": mount["links"]["listen"]}
+                    "is_video": is_video(mount["display_name"], videostream_keywords),
+                    "url": mount["links"]["listen"],
+                }
                 if public_only:
                     if mount["is_public"]:
                         s["mounts"].append(m)
@@ -582,8 +595,7 @@ def get_stations(api, channel_icon_url='', public_only=True,
 
             # get playlist info, to later show if listener requests are allowed
             # in the programme items
-            rp = api.get(
-                urljoin('/station/', station["id"], '/playlists'))
+            rp = api.get(urljoin("/station/", station["id"], "/playlists"))
 
             for playlist in rp:
                 p = {
@@ -595,20 +607,18 @@ def get_stations(api, channel_icon_url='', public_only=True,
                     "is_jingle": playlist["is_jingle"],
                     "include_in_on_demand": playlist["include_in_on_demand"],
                     "include_in_requests": playlist["include_in_requests"],
-                    "is_scheduled": playlist["schedule_items"] != []
+                    "is_scheduled": playlist["schedule_items"] != [],
                 }
                 # store list of schedules (IDs) this playlist is in,
                 # so we can find the correct one in get_programme()
                 # if multiple playlists have the same name (which IS allowed)
-                p["schedule_ids"] = [d.get('id')
-                                     for d in playlist["schedule_items"]]
+                p["schedule_ids"] = [d.get("id") for d in playlist["schedule_items"]]
 
                 if playlist["is_enabled"]:
                     s["playlists"].append(p)
 
             # get streamer info, to include image in programme's presenter info
-            rs = api.get(
-                urljoin('/station/', station["id"], '/streamers'))
+            rs = api.get(urljoin("/station/", station["id"], "/streamers"))
 
             for streamer in rs:
                 dj = {
@@ -618,12 +628,11 @@ def get_stations(api, channel_icon_url='', public_only=True,
                     "art": streamer["art"],
                     # Be careful: UI says "INTERNAL commments ony",
                     # but _could_ be used for a description
-                    "comments": streamer["comments"]
+                    "comments": streamer["comments"],
                 }
                 s["streamers"].append(dj)
 
         else:
-
             # no API key, just use the visible standard mounts
             for mount in station["mounts"]:
                 m = {
@@ -631,7 +640,7 @@ def get_stations(api, channel_icon_url='', public_only=True,
                     "name": mount["name"],
                     "is_default": mount["is_default"],
                     "is_video": is_video(mount["name"], videostream_keywords),
-                    "url": mount["url"]
+                    "url": mount["url"],
                 }
                 s["mounts"].append(m)
 
@@ -641,7 +650,7 @@ def get_stations(api, channel_icon_url='', public_only=True,
                 "name": station["name"] + " (HLS)",
                 "url": station["hls_url"],
                 "is_default": False,
-                "is_video": False
+                "is_video": False,
             }
             # future: if API returns "hls_is_default" (False if not)
             m["is_default"] = station.get("hls_is_default", False)
@@ -650,8 +659,9 @@ def get_stations(api, channel_icon_url='', public_only=True,
         # sort mounts by display name, put default mount(s) at beginning
         # this is intended for players that immediately start playout,
         # and for better human readability
-        s["mounts"] = sorted(s["mounts"], key=lambda k: (
-            not k["is_default"], k["name"]))
+        s["mounts"] = sorted(
+            s["mounts"], key=lambda k: (not k["is_default"], k["name"])
+        )
 
         if public_only:
             if station["is_public"]:
@@ -662,69 +672,88 @@ def get_stations(api, channel_icon_url='', public_only=True,
     return stations
 
 
-def create_m3u(instance_url, station, groups, output_folder='',
-               add_tvg_url=False, add_radio_tag=False):
+def create_m3u(
+    instance_url,
+    station,
+    groups,
+    output_folder="",
+    add_tvg_url=False,
+    add_radio_tag=False,
+):
     """Create an M3U playlist for a single station"""
 
     # create outfile from folder + station shortname + '.m3u'
-    outfile = os.path.join(
-        output_folder, sanitize(station["shortcode"]) + ".m3u")
+    outfile = os.path.join(output_folder, sanitize(station["shortcode"]) + ".m3u")
     print(f"Writing XMLTV Tuner file (M3U playlist): {outfile}")
 
-    with open(outfile, 'w') as f:
+    with open(outfile, "w") as f:
         if add_tvg_url:
             # -t/-tvgurl option: add links to the EPG on the '#EXTM3U' line;
             # MUST be reachable under /xmltv
-            tvg_url = urljoin(instance_url, xmltv_path,
-                              urlparse(instance_url).hostname + '.xml')
+            tvg_url = urljoin(
+                instance_url, xmltv_path, urlparse(instance_url).hostname + ".xml"
+            )
             f.write(f'#EXTM3U url-tvg="{tvg_url}" x-tvg-url="{tvg_url}"\n')
         else:
             # no links
-            f.write('#EXTM3U\n')
+            f.write("#EXTM3U\n")
 
         # build "group-title": supports ";"-delimited multiple groups
         # empty group replaced by station name
-        groups = ";".join([g.strip() or station["name"]
-                          for g in groups.split(";")])
+        groups = ";".join([g.strip() or station["name"] for g in groups.split(";")])
 
         for mount in station["mounts"]:
-            radio_tag = 'radio="true" ' if add_radio_tag and not mount["is_video"] else ''
+            radio_tag = (
+                'radio="true" ' if add_radio_tag and not mount["is_video"] else ""
+            )
             f.write(
-                f'#EXTINF:-1 tvg-name="{mount["name"]}" group-title="{groups}" {radio_tag}tvg-id="{station["channel_id"]}" tvg-logo="{station["icon"]}",{mount["name"]}\n')
-            f.write(mount['url'] + '\n')
+                f'#EXTINF:-1 tvg-name="{mount["name"]}" group-title="{groups}" {radio_tag}tvg-id="{station["channel_id"]}" tvg-logo="{station["icon"]}",{mount["name"]}\n'
+            )
+            f.write(mount["url"] + "\n")
 
 
-def create_m3u_all(instance_url, stations, groups,
-                   output_folder='', add_tvg_url=False, add_radio_tag=False):
+def create_m3u_all(
+    instance_url,
+    stations,
+    groups,
+    output_folder="",
+    add_tvg_url=False,
+    add_radio_tag=False,
+):
     """Create an M3U playlist for all stations"""
 
     # create outfile from folder + domain.name + '.m3u'
-    outfile = os.path.join(output_folder, urlparse(
-        instance_url).hostname + '.m3u')
+    outfile = os.path.join(output_folder, urlparse(instance_url).hostname + ".m3u")
     print(f"Writing XMLTV Tuner file (M3U playlist): {outfile}")
 
-    with open(outfile, 'w') as f:
+    with open(outfile, "w") as f:
         if add_tvg_url:
             # -t/-tvgurl option: add links to the EPG on the '#EXTM3U' line; MUST be reachable under /xmltv
-            tvg_url = urljoin(instance_url, xmltv_path,
-                              urlparse(instance_url).hostname + '.xml')
+            tvg_url = urljoin(
+                instance_url, xmltv_path, urlparse(instance_url).hostname + ".xml"
+            )
             f.write(f'#EXTM3U url-tvg="{tvg_url}" x-tvg-url="{tvg_url}"\n')
         else:
             # no links
-            f.write('#EXTM3U\n')
+            f.write("#EXTM3U\n")
 
         for station in stations:
             # build "group-title": supports ";"-delimited multiple groups
             # empty group replaced by station name
-            group_title = ";".join([g.strip() or station["name"]
-                                   for g in groups.split(";")])
+            group_title = ";".join(
+                [g.strip() or station["name"] for g in groups.split(";")]
+            )
 
             for mount in station["mounts"]:
-                radio_tag = 'radio="true" ' if add_radio_tag and not mount["is_video"] else ''
-                # better readable for humans: #EXTINF:-1 Name Group Radio? ID Logo,Name
+                radio_tag = (
+                    'radio="true" ' if add_radio_tag and not mount["is_video"] else ""
+                )
+                # better readable for humans: #EXTINF:-1 Name Group Radio? ID
+                # Logo,Name
                 f.write(
-                    f'#EXTINF:-1 tvg-name="{mount["name"]}" group-title="{group_title}" {radio_tag}tvg-id="{station["channel_id"]}" tvg-logo="{station["icon"]}",{mount["name"]}\n')
-                f.write(mount['url'] + '\n')
+                    f'#EXTINF:-1 tvg-name="{mount["name"]}" group-title="{group_title}" {radio_tag}tvg-id="{station["channel_id"]}" tvg-logo="{station["icon"]}",{mount["name"]}\n'
+                )
+                f.write(mount["url"] + "\n")
 
 
 def create_gap_fillers(station, programmes):
@@ -735,20 +764,22 @@ def create_gap_fillers(station, programmes):
 
     # find playlists that constitute the general rotation
     # (enabled, type default, not on schedule)
-    pl = [item for item in station["playlists"] if item["type"]
-          == "default" and not item["is_scheduled"]]
+    pl = [
+        item
+        for item in station["playlists"]
+        if item["type"] == "default" and not item["is_scheduled"]
+    ]
 
     # make a comma-separated string where the last element is separated by '&' instead
     # ex: '', 'a', 'a & b', 'a, b & c', ...
     names = [item["name"] for item in pl]
-    playlists = ' & '.join(filter(None, [', '.join(names[:-1])] + names[-1:]))
+    playlists = " & ".join(filter(None, [", ".join(names[:-1])] + names[-1:]))
 
     # see if any of them have requests enabled
-    requests_enabled = any(
-        [item for item in pl if item["include_in_requests"]])
+    requests_enabled = any([item for item in pl if item["include_in_requests"]])
 
     # sort by start times
-    programmes = sorted(programmes, key=lambda x: x['start'])
+    programmes = sorted(programmes, key=lambda x: x["start"])
 
     # set up text replacers
     replacers = {
@@ -758,19 +789,19 @@ def create_gap_fillers(station, programmes):
         "{station_description}": station["description"],
         "{station_website}": station["url"],
         "{player_url}": station["public_player_url"],
-        "{category}": category  # global
+        "{category}": category,  # global
     }
 
     gaps = []
 
     # start at the end of the first range
-    now = programmes[0]['stop']
+    now = programmes[0]["stop"]
 
     # iterate through programmes, ignoring the first range
     for pair in programmes[1:]:
         # if next start time is before current stop time, keep going until we find a gap
         # if next start time is after current end time, found the first gap
-        if pair['start'] > now:
+        if pair["start"] > now:
             # create a new gap filler programme
             # use programme's start year for '{year}'
             replacers["{year}"] = pair["start"][0:4]
@@ -782,20 +813,21 @@ def create_gap_fillers(station, programmes):
                 "sub-title": replace_vars(replacers, gap_filler_subtitle),
                 "desc": replace_vars(replacers, gap_filler_description),
                 "category": category,
-                "credits": []
+                "credits": [],
             }
             # parse again if listener requests enabled
             if requests_enabled:
                 replacers["{playlist}"] = p["title"]
                 p["title"] = replace_vars(replacers, requests_enabled_title)
-                p["sub-title"] = replace_vars(replacers,
-                                              requests_enabled_subtitle)
-                p["desc"] = p["desc"] + \
-                    replace_vars(replacers, requests_enabled_description)
+                p["sub-title"] = replace_vars(replacers, requests_enabled_subtitle)
+                p["desc"] = p["desc"] + replace_vars(
+                    replacers, requests_enabled_description
+                )
 
             # add extra info to description
-            p["desc"] = p["desc"].rstrip() + replace_vars(replacers,
-                                                          append_to_description)
+            p["desc"] = p["desc"].rstrip() + replace_vars(
+                replacers, append_to_description
+            )
 
             # remove leftover whitespace from description
             p["desc"] = clean(p["desc"])
@@ -804,15 +836,15 @@ def create_gap_fillers(station, programmes):
 
         # need to advance 'now' only if the next end time is past the current
         # end time
-        now = max(pair['stop'], now)
+        now = max(pair["stop"], now)
 
     return gaps
 
 
 def rfc3339_date(dt, utc_z=False):
-    """ Return datetime object as RFC 3339 string, an ISO 8601 profile.
-        Compatible with W3C-DTF format.
-        utc_z=True outputs "Z" instead of "+00:00" for UTC datetimes."""
+    """Return datetime object as RFC 3339 string, an ISO 8601 profile.
+    Compatible with W3C-DTF format.
+    utc_z=True outputs "Z" instead of "+00:00" for UTC datetimes."""
 
     if dt.tzinfo is None:
         suffix = "-00:00"  # unknown offset, naive dt
@@ -843,36 +875,40 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
     start = rfc3339_date(start.astimezone())
     end = rfc3339_date(end.astimezone())
 
-    params = {
-        "start": start,
-        "end": end
-    }
-    r = api.get(
-        urljoin('/station/', station["id"], '/schedule'), params=params)
+    params = {"start": start, "end": end}
+    r = api.get(urljoin("/station/", station["id"], "/schedule"), params=params)
 
     for r_pgm in r:
         p = {
             "id": r_pgm["id"],
             "type": r_pgm["type"],
             "channel": station["channel_id"],
-            "start": dt.datetime.strptime(
-                r_pgm["start"],
-                "%Y-%m-%dT%H:%M:%S%z").astimezone().strftime("%Y%m%d%H%M%S %z"),
-            "stop": dt.datetime.strptime(
-                r_pgm["end"],
-                "%Y-%m-%dT%H:%M:%S%z").astimezone().strftime("%Y%m%d%H%M%S %z"),
+            "start": dt.datetime.strptime(r_pgm["start"], "%Y-%m-%dT%H:%M:%S%z")
+            .astimezone()
+            .strftime("%Y%m%d%H%M%S %z"),
+            "stop": dt.datetime.strptime(r_pgm["end"], "%Y-%m-%dT%H:%M:%S%z")
+            .astimezone()
+            .strftime("%Y%m%d%H%M%S %z"),
             "title": r_pgm["title"],
             "sub-title": "",
             "desc": r_pgm["description"],
             "category": category,
-            "credits": []}
+            "credits": [],
+        }
 
         # try to enrich programme with playlist info
         if r_pgm["type"] == "playlist":
             # Find the CORRECT playlist if more than one playlist has the same name
             # Playlist Name and Schedule ID must match.
-            pl = next((item for item in station["playlists"] if item["name"]
-                       == r_pgm["name"] and r_pgm["id"] in item["schedule_ids"]), None)
+            pl = next(
+                (
+                    item
+                    for item in station["playlists"]
+                    if item["name"] == r_pgm["name"]
+                    and r_pgm["id"] in item["schedule_ids"]
+                ),
+                None,
+            )
 
             # playlist has listener requests enabled, enrich title, sub-title,
             # and description
@@ -885,14 +921,13 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                     "{station_website}": station["url"],
                     "{player_url}": station["public_player_url"],
                     "{year}": r_pgm["start"][0:4],
-                    "{category}": category  # global
+                    "{category}": category,  # global
                 }
-                p["title"] = replace_vars(
-                    replacers, requests_enabled_title)
-                p["sub-title"] = replace_vars(replacers,
-                                              requests_enabled_subtitle)
-                p["desc"] = r_pgm["description"].rstrip(
-                ) + replace_vars(replacers, requests_enabled_description)
+                p["title"] = replace_vars(replacers, requests_enabled_title)
+                p["sub-title"] = replace_vars(replacers, requests_enabled_subtitle)
+                p["desc"] = r_pgm["description"].rstrip() + replace_vars(
+                    replacers, requests_enabled_description
+                )
 
             # playlist is syndicated content (remote)
             if pl and pl["source"] == "remote_url":
@@ -904,19 +939,25 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                     "{station_website}": station["url"],
                     "{player_url}": station["public_player_url"],
                     "{year}": r_pgm["start"][0:4],
-                    "{category}": category  # global
+                    "{category}": category,  # global
                 }
                 p["title"] = replace_vars(replacers, remote_title)
                 p["sub-title"] = replace_vars(replacers, remote_subtitle)
-                p["desc"] = r_pgm["description"].rstrip(
-                ) + replace_vars(replacers, remote_description)
+                p["desc"] = r_pgm["description"].rstrip() + replace_vars(
+                    replacers, remote_description
+                )
 
         # try to enrich programme with streamer info
         if r_pgm["type"] == "streamer":
             # try to find the corresponding streamer by name (sadly, no ID)
             dj = next(
-                (item for item in station["streamers"] if item["name"] == r_pgm["name"]),
-                None)
+                (
+                    item
+                    for item in station["streamers"]
+                    if item["name"] == r_pgm["name"]
+                ),
+                None,
+            )
 
             if dj:
                 # found the streamer, use their info (and image)
@@ -929,32 +970,35 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
                     "{station_website}": station["url"],
                     "{player_url}": station["public_player_url"],
                     "{year}": r_pgm["start"][0:4],
-                    "{category}": category  # global
+                    "{category}": category,  # global
                 }
 
                 p["title"] = replace_vars(replacers, live_title)
                 p["sub-title"] = replace_vars(replacers, live_subtitle)
-                p["desc"] = r_pgm["description"].rstrip(
-                ) + replace_vars(replacers, live_description)
+                p["desc"] = r_pgm["description"].rstrip() + replace_vars(
+                    replacers, live_description
+                )
                 p["credits"].append(
-                    {"presenter": {"name": dj["name"], "image": dj["art"]}})
+                    {"presenter": {"name": dj["name"], "image": dj["art"]}}
+                )
             else:
                 # streamer not provided, make for some general niceness
                 replacers = {
                     "{presenter}": r_pgm["name"],
-                    "{image_url}": '',
-                    "{comments}": '',
+                    "{image_url}": "",
+                    "{comments}": "",
                     "{station_name}": station["name"],
                     "{station_description}": station["description"],
                     "{station_website}": station["url"],
                     "{player_url}": station["public_player_url"],
                     "{year}": r_pgm["start"][0:4],
-                    "{category}": category  # global
+                    "{category}": category,  # global
                 }
                 p["title"] = replace_vars(replacers, live_title)
                 p["sub-title"] = replace_vars(replacers, live_subtitle)
-                p["desc"] = r_pgm["description"].rstrip(
-                ) + replace_vars(replacers, live_description)
+                p["desc"] = r_pgm["description"].rstrip() + replace_vars(
+                    replacers, live_description
+                )
                 p["credits"].append({"presenter": {"name": r_pgm["name"]}})
 
         # add extra info to description
@@ -964,10 +1008,9 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
             "{station_website}": station["url"],
             "{player_url}": station["public_player_url"],
             "{year}": r_pgm["start"][0:4],
-            "{category}": category  # global
+            "{category}": category,  # global
         }
-        p["desc"] = p["desc"].rstrip() + replace_vars(replacers,
-                                                      append_to_description)
+        p["desc"] = p["desc"].rstrip() + replace_vars(replacers, append_to_description)
 
         # remove extra whitespace from description
         p["desc"] = clean(p["desc"])
@@ -984,18 +1027,16 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
         programmes = programmes + create_gap_fillers(station, programmes)
 
     # sort by start time
-    programmes = sorted(programmes, key=lambda k: k['start'])
+    programmes = sorted(programmes, key=lambda k: k["start"])
 
     return programmes
 
 
-def create_xmltv(instance_url, stations, programmes,
-                 output_folder='', add_gzip=False):
+def create_xmltv(instance_url, stations, programmes, output_folder="", add_gzip=False):
     """Create an XMLTV EPG for all stations"""
 
     # create outfile from folder + domain.name + '.xml'
-    outfile = os.path.join(output_folder, urlparse(
-        instance_url).hostname + '.xml')
+    outfile = os.path.join(output_folder, urlparse(instance_url).hostname + ".xml")
     print(f"Writing XMLTV EPG file: {outfile}")
 
     # set up the root
@@ -1007,15 +1048,14 @@ def create_xmltv(instance_url, stations, programmes,
             "date": date,
             "source-info-url": instance_url,
             "source-info-name": urlparse(instance_url).netloc,
-            "generator-info-name": APPNAME +
-            ' ' +
-            VERSION,
-            "generator-info-url": APPURL})
+            "generator-info-name": APPNAME + " " + VERSION,
+            "generator-info-url": APPURL,
+        },
+    )
 
     # set up the channels
     for station in stations:
-        channel = et.SubElement(root, "channel", attrib={
-                                "id": station["channel_id"]})
+        channel = et.SubElement(root, "channel", attrib={"id": station["channel_id"]})
         et.SubElement(channel, "display-name").text = station["name"]
         if station["icon"]:
             et.SubElement(channel, "icon", attrib={"src": station["icon"]})
@@ -1025,36 +1065,40 @@ def create_xmltv(instance_url, stations, programmes,
         for r_pgm in s_pgm:
             attrib_lang = {"lang": language}
             programme_attrib = dict(
-                start=r_pgm["start"],
-                stop=r_pgm["stop"],
-                channel=r_pgm["channel"])
-            programme = et.SubElement(
-                root, "programme", attrib=programme_attrib)
-            et.SubElement(programme, "title",
-                          attrib=attrib_lang).text = r_pgm["title"]
+                start=r_pgm["start"], stop=r_pgm["stop"], channel=r_pgm["channel"]
+            )
+            programme = et.SubElement(root, "programme", attrib=programme_attrib)
+            et.SubElement(programme, "title", attrib=attrib_lang).text = r_pgm["title"]
             # leave out empty subtitles since some programs throw warnings
             if r_pgm["sub-title"]:
-                et.SubElement(programme, "sub-title",
-                              attrib=attrib_lang).text = r_pgm["sub-title"]
-            et.SubElement(programme, "desc",
-                          attrib=attrib_lang).text = r_pgm["desc"]
+                et.SubElement(programme, "sub-title", attrib=attrib_lang).text = r_pgm[
+                    "sub-title"
+                ]
+            et.SubElement(programme, "desc", attrib=attrib_lang).text = r_pgm["desc"]
 
             credits = et.SubElement(programme, "credits")
 
             # see if we have a presenter in credits
             presenter = next(
-                (item["presenter"] for item in r_pgm["credits"] if item.get("presenter")),
-                None)
+                (
+                    item["presenter"]
+                    for item in r_pgm["credits"]
+                    if item.get("presenter")
+                ),
+                None,
+            )
             if presenter:
                 # add presenter credit and image (if available)
                 credit = et.SubElement(credits, "presenter")
                 credit.text = presenter["name"]
-                if presenter["image"]:
-                    et.SubElement(credit, "image", attrib={
-                                  "type": "person"}).text = presenter["image"]
+                if presenter.get("image"):
+                    et.SubElement(
+                        credit, "image", attrib={"type": "person"}
+                    ).text = presenter["image"]
 
-            et.SubElement(programme, "category",
-                          attrib=attrib_lang).text = r_pgm["category"]
+            et.SubElement(programme, "category", attrib=attrib_lang).text = r_pgm[
+                "category"
+            ]
 
     with et.xmlfile(outfile, encoding="UTF-8") as xf:
         xf.write_declaration()
@@ -1063,13 +1107,12 @@ def create_xmltv(instance_url, stations, programmes,
 
     # create gzip-compressed (.gz) file if requested
     if add_gzip:
-        infile = os.path.join(output_folder, urlparse(
-            instance_url).hostname + '.xml')
-        outfile = infile + '.gz'
+        infile = os.path.join(output_folder, urlparse(instance_url).hostname + ".xml")
+        outfile = infile + ".gz"
         print(f"Writing XMLTV EPG gzip file: {outfile}")
 
-        with open(infile, 'rb') as f_in:
-            with gzip.open(outfile, 'wb') as f_out:
+        with open(infile, "rb") as f_in:
+            with gzip.open(outfile, "wb") as f_out:
                 shutil.copyfileobj(f_in, f_out)
 
 
@@ -1082,17 +1125,17 @@ def linkify_urls(text):
     """
     urls = re.compile(
         r"(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))",
-        re.MULTILINE | re.UNICODE)
+        re.MULTILINE | re.UNICODE,
+    )
     text = urls.sub(r'<a href="\1" target="_blank">\1</a>', text)
     return text
 
 
-def create_rss_station(instance_url, station, programmes, output_folder=''):
+def create_rss_station(instance_url, station, programmes, output_folder=""):
     """Create an RSS Feed for a single station"""
 
     # create outfile from folder + station shortname + '.rss'
-    outfile = os.path.join(
-        output_folder, sanitize(station["shortcode"]) + ".rss")
+    outfile = os.path.join(output_folder, sanitize(station["shortcode"]) + ".rss")
     print(f"Writing RSS Feed file: {outfile}")
 
     # set up the root
@@ -1105,19 +1148,21 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
         "atom": "http://www.w3.org/2005/Atom",
         "media": "http://search.yahoo.com/mrss/",
         "fh": "http://purl.org/syndication/history/1.0",
-        "dcterms": "http://purl.org/dc/terms/"
+        "dcterms": "http://purl.org/dc/terms/",
     }
     root = et.Element("rss", attrib={"version": "2.0"}, nsmap=nsmap)
 
     # set up the channel
     channel = et.SubElement(root, "channel")
 
-    self_url = urljoin(instance_url, xmltv_path,
-                       sanitize(station["shortcode"]) + '.rss')
-    et.SubElement(channel, "{http://www.w3.org/2005/Atom}link", attrib={
-        "href": self_url,
-        "rel": "self",
-        "type": "application/rss+xml"})
+    self_url = urljoin(
+        instance_url, xmltv_path, sanitize(station["shortcode"]) + ".rss"
+    )
+    et.SubElement(
+        channel,
+        "{http://www.w3.org/2005/Atom}link",
+        attrib={"href": self_url, "rel": "self", "type": "application/rss+xml"},
+    )
 
     et.SubElement(channel, "title").text = station["name"]
     et.SubElement(channel, "link").text = station["url"]
@@ -1145,11 +1190,10 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
     # fetch programmes of this station (by channel_id)
     s_pgm = []
     for s in programmes:
-        s_pgm = s_pgm + [pgm for pgm in s if pgm["channel"]
-                         == station["channel_id"]]
+        s_pgm = s_pgm + [pgm for pgm in s if pgm["channel"] == station["channel_id"]]
 
     # sort by start time
-    s_pgm = sorted(s_pgm, key=lambda k: k['start'])
+    s_pgm = sorted(s_pgm, key=lambda k: k["start"])
 
     # create the channel items
     for r_pgm in s_pgm:
@@ -1158,25 +1202,29 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
         et.SubElement(item, "link").text = station["public_player_url"]
 
         # prepare some vars
-        start_dt = dt.datetime.strptime(
-            r_pgm["start"], "%Y%m%d%H%M%S %z").astimezone()
-        stop_dt = dt.datetime.strptime(
-            r_pgm["stop"], "%Y%m%d%H%M%S %z").astimezone()
-        year = start_dt.strftime('%Y')
+        start_dt = dt.datetime.strptime(r_pgm["start"], "%Y%m%d%H%M%S %z").astimezone()
+        stop_dt = dt.datetime.strptime(r_pgm["stop"], "%Y%m%d%H%M%S %z").astimezone()
+        year = start_dt.strftime("%Y")
 
         airdate = dt.datetime.strftime(start_dt, "%F")
-        airtime = dt.datetime.strftime(start_dt, "%H:%M") + '–' + \
-            dt.datetime.strftime(stop_dt, "%H:%M")
+        airtime = (
+            dt.datetime.strftime(start_dt, "%H:%M")
+            + "–"
+            + dt.datetime.strftime(stop_dt, "%H:%M")
+        )
 
         # Airtime length in hours and minutes
         airtime_length_td = stop_dt - start_dt
         airtime_length_mins = airtime_length_td.seconds // 60
-        airtime_length = '{0:2}'.format(airtime_length_mins // 60) + ':' + \
-                         '{0:02}'.format(airtime_length_mins % 60)  # + ':00'
+        airtime_length = (
+            "{0:2}".format(airtime_length_mins // 60)
+            + ":"
+            + "{0:02}".format(airtime_length_mins % 60)
+        )  # + ':00'
         airtime_length = airtime_length.strip()
 
         # EPG <desc> allows newlines, make them <br/> for prettier display
-        desc = '<br/>'.join(r_pgm["desc"].splitlines())
+        desc = "<br/>".join(r_pgm["desc"].splitlines())
 
         # replacers
         replacers = {
@@ -1191,7 +1239,7 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
             "{airdate}": airdate,
             "{airtime}": airtime,
             "{airtime_length}": airtime_length,
-            "{desc}": desc
+            "{desc}": desc,
         }
 
         description = replace_vars(replacers, rss_feed_description)
@@ -1209,33 +1257,36 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
         et.SubElement(item, "pubDate").text = pub_date
 
         # construct guid of channel_id and programme start time
-        guid = r_pgm["channel"] + '-' + start_dt.strftime('%Y%m%d%H%M%S')
-        et.SubElement(item, "guid", attrib={
-                      "isPermaLink": "false"}).text = guid
+        guid = r_pgm["channel"] + "-" + start_dt.strftime("%Y%m%d%H%M%S")
+        et.SubElement(item, "guid", attrib={"isPermaLink": "false"}).text = guid
 
         # use <dcterms:valid> to put validity on the ITEM (not every media element)
         # start and end use W3C-DTF datetime format
         start = rfc3339_date(start_dt, utc_z=True)
         end = rfc3339_date(stop_dt, utc_z=True)
         et.SubElement(
-            item,
-            "{http://purl.org/dc/terms/}valid").text = f"start={start}; end={end}; scheme=W3C-DTF"
+            item, "{http://purl.org/dc/terms/}valid"
+        ).text = f"start={start}; end={end}; scheme=W3C-DTF"
 
         # media:... elements: Put all streams and the player link in a media
         # group
-        media_group = et.SubElement(
-            item, "{http://search.yahoo.com/mrss/}group")
+        media_group = et.SubElement(item, "{http://search.yahoo.com/mrss/}group")
         # iterate over credits, trying to find a presenter image
         # else use station icon instead
         thumbnail = next(
-            (item["presenter"]["image"] for item in r_pgm["credits"] if item.get(
-                "presenter", {}).get("image")), station["icon"])
+            (
+                item["presenter"]["image"]
+                for item in r_pgm["credits"]
+                if item.get("presenter", {}).get("image")
+            ),
+            station["icon"],
+        )
         if thumbnail:
             et.SubElement(
                 media_group,
                 "{http://search.yahoo.com/mrss/}thumbnail",
-                attrib={
-                    "url": thumbnail})
+                attrib={"url": thumbnail},
+            )
 
         et.SubElement(
             media_group,
@@ -1243,7 +1294,9 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
             attrib={
                 "url": station["public_player_url"],
                 "width": "800",
-                "height": "450"})
+                "height": "450",
+            },
+        )
 
         for mount in station["mounts"]:
             url = mount["url"]
@@ -1260,12 +1313,16 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
                     "medium": medium,
                     "isDefault": "true" if is_default else "false",
                     "expression": expression,
-                    "lang": language})
+                    "lang": language,
+                },
+            )
             # sadly, not many readers use this yet; it should provide the mount
             # name as title of the media:content
-            et.SubElement(media_content,
-                          "{http://search.yahoo.com/mrss/}title",
-                          attrib={"type": "plain"}).text = title
+            et.SubElement(
+                media_content,
+                "{http://search.yahoo.com/mrss/}title",
+                attrib={"type": "plain"},
+            ).text = title
 
     with et.xmlfile(outfile, encoding="UTF-8") as xf:
         xf.write_declaration()
@@ -1273,6 +1330,7 @@ def create_rss_station(instance_url, station, programmes, output_folder=''):
 
 
 # some tests for arparse
+
 
 def my_url(arg):
     """Check if valid URL given"""
@@ -1285,7 +1343,7 @@ def my_url(arg):
 def my_url_path(arg):
     """Check if valid icon URL given"""
     url = urlparse(arg)
-    if arg == '' or all((url.scheme, url.netloc, url.path)):
+    if arg == "" or all((url.scheme, url.netloc, url.path)):
         return arg
     raise argparse.ArgumentTypeError(f"Invalid URL (path missing): '{arg}'")
 
@@ -1307,8 +1365,11 @@ class Range(argparse.Action):
 
     def __call__(self, parser, namespace, value, option_string=None):
         if not (self.min <= value <= self.max):
-            msg = 'invalid choice: %r (choose from [%d-%d])' % \
-                (value, self.min, self.max)
+            msg = "invalid choice: %r (choose from [%d-%d])" % (
+                value,
+                self.min,
+                self.max,
+            )
             raise argparse.ArgumentError(self, msg)
         setattr(namespace, self.dest, value)
 
@@ -1323,18 +1384,21 @@ class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter):
         # we need to call it line by line
         for line in lines:
             new.append(
-                '\n'.join(
+                "\n".join(
                     textwrap.wrap(
                         line,
                         width,
                         initial_indent=indent,
                         subsequent_indent=indent,
-                        replace_whitespace=False)))
-        return '\n'.join(new)
+                        replace_whitespace=False,
+                    )
+                )
+            )
+        return "\n".join(new)
 
 
 parser = argparse.ArgumentParser(
-    description='Create XMLTV Tuner, EPG and RSS Feed files from an AzuraCast Web Radio.',
+    description="Create XMLTV Tuner, EPG and RSS Feed files from an AzuraCast Web Radio.",
     epilog=f"""
 %(prog)s can create XMLTV M3U Tuner, XML EPG and RSS 2.0 Feed files for both your own and other AzuraCast stations.
 
@@ -1357,96 +1421,119 @@ Output files are named after the (sanitized) station shortcode ("URL Stub" in Az
 Edit '{argparse._sys.argv[0]}' using a text editor to change some defaults near the top of the file. No worries, everything is well documented.
 
 Please report any issues to {APPURL}/issues.""",
-    formatter_class=CustomFormatter)
-parser.add_argument('-v', '--version', action='version',
-                    version='%(prog)s ' + __version__)
-parser.add_argument('-u', '--url', type=my_url, default=instance_url,
-                    help='base URL to an AzuraCast instance')
+    formatter_class=CustomFormatter,
+)
 parser.add_argument(
-    '-i',
-    '--icon',
-    metavar='URL',
+    "-v", "--version", action="version", version="%(prog)s " + __version__
+)
+parser.add_argument(
+    "-u",
+    "--url",
+    type=my_url,
+    default=instance_url,
+    help="base URL to an AzuraCast instance",
+)
+parser.add_argument(
+    "-i",
+    "--icon",
+    metavar="URL",
     type=my_url_path,
     default=channel_icon_url,
-    help='URL to a channel icon; will use station\'s default album art if omitted')
+    help="URL to a channel icon; will use station's default album art if omitted",
+)
 parser.add_argument(
-    '-c',
-    '--customplayer',
-    metavar='URL',
+    "-c",
+    "--customplayer",
+    metavar="URL",
     type=my_url_path,
     default=custom_player_url,
-    help='URL to a custom web player; modifies {player_url} and {request_url} variables')
+    help="URL to a custom web player; modifies {player_url} and {request_url} variables",
+)
 parser.add_argument(
-    '-d',
-    '--days',
+    "-d",
+    "--days",
     type=int,
     minimum=1,
     maximum=30,
     action=Range,
     default=num_days,
-    help='number of days in the future [%(min)d-%(max)d] to include in the EPG')
+    help="number of days in the future [%(min)d-%(max)d] to include in the EPG",
+)
 parser.add_argument(
-    '-f',
-    '--fillgaps',
-    action='store_true',
+    "-f",
+    "--fillgaps",
+    action="store_true",
     default=fill_gaps,
-    help='fill gaps between programmes with a \'General Rotation\' entry')
+    help="fill gaps between programmes with a 'General Rotation' entry",
+)
 parser.add_argument(
-    '-o',
-    '--output',
-    metavar='FOLDER',
+    "-o",
+    "--output",
+    metavar="FOLDER",
     type=my_path,
     default=output_folder,
-    help='output folder for XMLTV files')
+    help="output folder for XMLTV files",
+)
 parser.add_argument(
-    '-a',
-    '--apikey',
+    "-a",
+    "--apikey",
     default=api_key,
-    help='AzuraCast API key; allows creating much better EPG data, see below')
+    help="AzuraCast API key; allows creating much better EPG data, see below",
+)
 parser.add_argument(
-    '-p',
-    '--public',
-    action='store_true',
+    "-p",
+    "--public",
+    action="store_true",
     default=public_only,
-    help='include only public stations & streams')
+    help="include only public stations & streams",
+)
 parser.add_argument(
-    '-m',
-    '--m3u',
-    action='store_true',
+    "-m",
+    "--m3u",
+    action="store_true",
     default=make_m3u,
-    help='create M3U XMLTV Tuner file(s); only needed on first run or after changes in AzuraCast')
+    help="create M3U XMLTV Tuner file(s); only needed on first run or after changes in AzuraCast",
+)
 parser.add_argument(
-    '--group',
+    "--group",
     type=str,
     default=m3u_group_title,
-    help='set M3U \'group-title\' to something other than station name (see below)')
+    help="set M3U 'group-title' to something other than station name (see below)",
+)
 parser.add_argument(
-    '-r',
-    '--radio',
-    action='store_true',
+    "-r",
+    "--radio",
+    action="store_true",
     default=add_radio_tag,
-    help='add \'radio="true"\' tags to M3U #EXTINF; allows distinction between radio and TV channels (see below)')
+    help="add 'radio=\"true\"' tags to M3U #EXTINF; allows distinction between radio and TV channels (see below)",
+)
 parser.add_argument(
-    '-t',
-    '--tvgurl',
-    action='store_true',
+    "-t",
+    "--tvgurl",
+    action="store_true",
     default=add_tvg_url,
-    help='add \'tvg-url\' tags to M3U file; allows software to find the corresponding EPG automatically (see below)')
+    help="add 'tvg-url' tags to M3U file; allows software to find the corresponding EPG automatically (see below)",
+)
 parser.add_argument(
-    '-g',
-    '--gzip',
-    action='store_true',
+    "-g",
+    "--gzip",
+    action="store_true",
     default=add_gzip,
-    help='additionally output a gzip-compressed (.gz) version of the EPG XML file; many clients can use this format, and it reduces transmission time and bandwidth')
-parser.add_argument('--rss', action='store_true', default=make_rss,
-                    help='create/update RSS 2.0 Feed(s); one feed per station')
+    help="additionally output a gzip-compressed (.gz) version of the EPG XML file; many clients can use this format, and it reduces transmission time and bandwidth",
+)
+parser.add_argument(
+    "--rss",
+    action="store_true",
+    default=make_rss,
+    help="create/update RSS 2.0 Feed(s); one feed per station",
+)
 
 args = parser.parse_args()
 
 instance_url = args.url
 api_key = args.apikey
 public_only = args.public
-output_folder = args.output + '/'
+output_folder = args.output + "/"
 make_m3u = args.m3u
 make_rss = args.rss
 channel_icon_url = args.icon
@@ -1470,7 +1557,8 @@ stations = get_stations(
     api,
     channel_icon_url=channel_icon_url,
     public_only=public_only,
-    videostream_keywords=videostream_keywords)
+    videostream_keywords=videostream_keywords,
+)
 
 # Create M3U playlist files
 if make_m3u:
@@ -1481,14 +1569,16 @@ if make_m3u:
             m3u_group_title,
             output_folder=output_folder,
             add_tvg_url=add_tvg_url,
-            add_radio_tag=add_radio_tag)
+            add_radio_tag=add_radio_tag,
+        )
     create_m3u_all(
         instance_url,
         stations,
         m3u_group_title,
         output_folder=output_folder,
         add_tvg_url=add_tvg_url,
-        add_radio_tag=add_radio_tag)
+        add_radio_tag=add_radio_tag,
+    )
 
 # Get schedules from all stations
 programmes = []
@@ -1496,11 +1586,13 @@ for station in stations:
     programmes.append(get_programme(api, station, num_days, fill_gaps))
 
 # Create XMLTV file, add gzipped .gz version if requested
-create_xmltv(instance_url, stations, programmes,
-             output_folder=output_folder, add_gzip=add_gzip)
+create_xmltv(
+    instance_url, stations, programmes, output_folder=output_folder, add_gzip=add_gzip
+)
 
 # Create RSS Feed files
 if make_rss:
     for station in stations:
-        create_rss_station(instance_url, station, programmes,
-                           output_folder=output_folder)
+        create_rss_station(
+            instance_url, station, programmes, output_folder=output_folder
+        )
