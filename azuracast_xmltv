@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # encoding: utf-8
 
-# azuracast_xmltv
-# grabs EPG info from an AzuraCast (web radio) instance
-# and provides an XMLTV.xml type listing
-#
+"""azuracast_xmltv
+
+Fetches EPG info from an AzuraCast (web radio) instance
+and provides XMLTV Tuner M3U, EPG XML, and RSS feed listings.
+"""
+
 # Note: Requires Python 3.7 or newer (for correct strftime/strptime handling).
 #
 # One AzuraCast instance can have multiple stations (= "channels").
@@ -147,9 +149,15 @@
 #     Makefile included, use 'make format' to re-format code
 # 2023-11-07 - Moonbase - v0.16.1
 #   - harden initial AzuraCast server check.
+# 2023-11-08 - Moonbase - v0.16.2
+#   - minor cleanup
+# 2023-11-08 - Moonbase - v0.17.0
+#   - convert to Python module
+#   - API access errors now shown, even if we continue (mostly no/wrong API key)
+#   - some code cleanup
 
 # version info
-__version_info__ = ("0", "16", "1")
+__version_info__ = ("0", "17", "0")
 __version__ = ".".join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -390,11 +398,11 @@ xmltv_path = "/xmltv"
 import os
 import sys
 
-ME = os.path.basename(sys.argv[0])
+ME = os.path.basename(sys.argv[0])  # should we better use __file__?
 
 
 def errprint(*args, **kwargs):
-    """Print error messages to stderr, nicely"""
+    """Print error messages to stderr, nicely."""
     print(ME + ":", "error:", *args, file=sys.stderr, **kwargs)
 
 
@@ -419,7 +427,10 @@ except Exception as error:
 
 
 def urljoin(*args):
-    """Safely join parts of an URL"""
+    """Safely join parts of an URL.
+
+    TODO: Fix second slash being removed from scheme like "https://".
+    """
     # remove "None" args, convert others to str and strip
     args = [str(x).strip() for x in args if x is not None]
     # save trailing slash
@@ -428,8 +439,8 @@ def urljoin(*args):
     return "/".join(filter(None, [x.strip("/") for x in args])) + trailing_slash
 
 
-class azuracast_api:
-    """AzuraCast API interface, strictly JSON"""
+class AzuraCastAPI:
+    """AzuraCast API interface, strictly JSON."""
 
     def __init__(self, instance_url, api_key="", timeout=30):
         self.instance_url = instance_url
@@ -473,7 +484,7 @@ class azuracast_api:
         return response and response.get("online", False)
 
     def get(self, endpoint, params={}, quit_on_error=False):
-        """Get s/th from an API endpoint; return empty list on error (or quit)"""
+        """Get API JSON resonse; return empty list on error (or quit)."""
         try:
             response = requests.get(
                 urljoin(self.instance_url, "/api", endpoint),
@@ -485,8 +496,8 @@ class azuracast_api:
             self.content_type = response.headers.get("Content-Type", "")
             response.raise_for_status()
         except Exception as error:
+            errprint(type(error).__name__, "–", error)
             if quit_on_error:
-                errprint(type(error).__name__, "–", error)
                 sys.exit(1)
             else:
                 # empty list = "nothing" for further processing by caller
@@ -506,7 +517,7 @@ class azuracast_api:
 
 
 def sanitize(name):
-    """Sanitize a station shortname to become RFC2838-compliant"""
+    """Sanitize a station shortname to become RFC2838-compliant."""
     # strip, replace ' ' & '_' with '-' (no '_' allowed in domains)
     name = name.strip().translate(str.maketrans(" _", "--"))
     keep = "-."
@@ -514,15 +525,15 @@ def sanitize(name):
     return "".join(c for c in name if c.isalnum() or c in keep)
 
 
-def clean(description):
-    """Remove all leftover whitespace from a programme description, not using re"""
+def clean_text(description):
+    """Remove all leftover whitespace from a programme description, not using re."""
     text = description.strip()
     lines = [line.split() for line in text.splitlines()]
     return "\n".join(" ".join(word for word in line) for line in lines)
 
 
 def replace_vars(dictionary, text):
-    """replace moustache-type variables in text"""
+    """Replace moustache-type variables in text (one level deep)."""
     # The dictionary is a simple key, value dict like so:
     # {
     #   "{variable1}": "replacement text 1",
@@ -539,7 +550,7 @@ def replace_vars(dictionary, text):
 
 def is_video(name, keywords):
     """Try to determine if a stream is a video stream
-    by checking a list of keywords"""
+    by checking a list of keywords."""
 
     # casefold keywords for comparison, just in case
     keywords = [k.casefold() for k in keywords]
@@ -555,7 +566,7 @@ def is_video(name, keywords):
 
 
 def get_stations(api, channel_icon_url="", public_only=True, videostream_keywords=[]):
-    """Get station info from this instance"""
+    """Get station info from this instance."""
     stations = []
 
     r = api.get("/stations")
@@ -703,7 +714,7 @@ def create_m3u(
     add_tvg_url=False,
     add_radio_tag=False,
 ):
-    """Create an M3U playlist for a single station"""
+    """Create an M3U playlist for a single station."""
 
     # create outfile from folder + station shortname + '.m3u'
     outfile = os.path.join(output_folder, sanitize(station["shortcode"]) + ".m3u")
@@ -743,7 +754,7 @@ def create_m3u_all(
     add_tvg_url=False,
     add_radio_tag=False,
 ):
-    """Create an M3U playlist for all stations"""
+    """Create an M3U playlist for all stations."""
 
     # create outfile from folder + domain.name + '.m3u'
     outfile = os.path.join(output_folder, urlparse(instance_url).hostname + ".m3u")
@@ -780,7 +791,7 @@ def create_m3u_all(
 
 
 def create_gap_fillers(station, programmes):
-    """Find gaps between programmes, return list of "gap filler" entries"""
+    """Find gaps between programmes, return list of "gap filler" entries."""
 
     if len(programmes) <= 1:
         return []
@@ -853,7 +864,7 @@ def create_gap_fillers(station, programmes):
             )
 
             # remove leftover whitespace from description
-            p["desc"] = clean(p["desc"])
+            p["desc"] = clean_text(p["desc"])
 
             gaps.append(p)
 
@@ -881,7 +892,7 @@ def rfc3339_date(dt, utc_z=False):
 
 
 def get_programme(api, station, num_days=num_days, fill_gaps=False):
-    """Get a channel's programme"""
+    """Get a channel's programme."""
 
     programmes = []
 
@@ -1036,7 +1047,7 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
         p["desc"] = p["desc"].rstrip() + replace_vars(replacers, append_to_description)
 
         # remove extra whitespace from description
-        p["desc"] = clean(p["desc"])
+        p["desc"] = clean_text(p["desc"])
 
         programmes.append(p)
 
@@ -1056,7 +1067,7 @@ def get_programme(api, station, num_days=num_days, fill_gaps=False):
 
 
 def create_xmltv(instance_url, stations, programmes, output_folder="", add_gzip=False):
-    """Create an XMLTV EPG for all stations"""
+    """Create an XMLTV EPG for all stations."""
 
     # create outfile from folder + domain.name + '.xml'
     outfile = os.path.join(output_folder, urlparse(instance_url).hostname + ".xml")
@@ -1142,6 +1153,7 @@ def create_xmltv(instance_url, stations, programmes, output_folder="", add_gzip=
 def linkify_urls(text):
     """
     (Try to) replace any URLs in text with anchor links, for HTML conversion.
+
     Based on John Gruber’s article: https://daringfireball.net/2010/07/improved_regex_for_matching_urls
     and Gist: https://gist.github.com/gruber/249502
     "Liberal Regex Pattern for Any URLs"
@@ -1155,7 +1167,7 @@ def linkify_urls(text):
 
 
 def create_rss_station(instance_url, station, programmes, output_folder=""):
-    """Create an RSS Feed for a single station"""
+    """Create an RSS Feed for a single station."""
 
     # create outfile from folder + station shortname + '.rss'
     outfile = os.path.join(output_folder, sanitize(station["shortcode"]) + ".rss")
@@ -1268,7 +1280,7 @@ def create_rss_station(instance_url, station, programmes, output_folder=""):
         description = replace_vars(replacers, rss_feed_description)
 
         # remove extra whitespace from description
-        description = clean(description)
+        description = clean_text(description)
 
         # make URLs clickable in HTML
         description = linkify_urls(description)
@@ -1355,24 +1367,24 @@ def create_rss_station(instance_url, station, programmes, output_folder=""):
 # some tests for arparse
 
 
-def my_url(arg):
-    """Check if valid URL given"""
+def valid_url(arg):
+    """Check if argument is a valid URL (scheme + domain)."""
     url = urlparse(arg)
     if all((url.scheme, url.netloc)):
         return arg
     raise argparse.ArgumentTypeError(f"Invalid URL: '{arg}'")
 
 
-def my_url_path(arg):
-    """Check if valid icon URL given"""
+def valid_url_path(arg):
+    """Check if argument is a valid URL (scheme + domain + path)."""
     url = urlparse(arg)
     if arg == "" or all((url.scheme, url.netloc, url.path)):
         return arg
     raise argparse.ArgumentTypeError(f"Invalid URL (path missing): '{arg}'")
 
 
-def my_path(arg):
-    """Check for valid output file path"""
+def valid_path(arg):
+    """Check if argument is a valid output folder path."""
     arg = os.path.normpath(arg)
     if os.path.isdir(arg):
         return arg
@@ -1398,7 +1410,7 @@ class Range(argparse.Action):
 
 
 class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter):
-    """Format output like ArgumentDefaultsHelpFormatter & RawDescriptionHelpFormatter but wrap nicely"""
+    """Format output like ArgumentDefaultsHelpFormatter & RawDescriptionHelpFormatter but wrap nicely."""
 
     def _fill_text(self, text, width, indent):
         lines = text.strip().splitlines(keepends=True)
@@ -1452,7 +1464,7 @@ parser.add_argument(
 parser.add_argument(
     "-u",
     "--url",
-    type=my_url,
+    type=valid_url,
     default=instance_url,
     help="base URL to an AzuraCast instance",
 )
@@ -1460,7 +1472,7 @@ parser.add_argument(
     "-i",
     "--icon",
     metavar="URL",
-    type=my_url_path,
+    type=valid_url_path,
     default=channel_icon_url,
     help="URL to a channel icon; will use station's default album art if omitted",
 )
@@ -1468,7 +1480,7 @@ parser.add_argument(
     "-c",
     "--customplayer",
     metavar="URL",
-    type=my_url_path,
+    type=valid_url_path,
     default=custom_player_url,
     help="URL to a custom web player; modifies {player_url} and {request_url} variables",
 )
@@ -1493,7 +1505,7 @@ parser.add_argument(
     "-o",
     "--output",
     metavar="FOLDER",
-    type=my_path,
+    type=valid_path,
     default=output_folder,
     help="output folder for XMLTV files",
 )
@@ -1551,71 +1563,119 @@ parser.add_argument(
     help="create/update RSS 2.0 Feed(s); one feed per station",
 )
 
-args = parser.parse_args()
 
-instance_url = args.url
-api_key = args.apikey
-public_only = args.public
-output_folder = args.output + "/"
-make_m3u = args.m3u
-make_rss = args.rss
-channel_icon_url = args.icon
-custom_player_url = args.customplayer
-num_days = args.days
-fill_gaps = args.fillgaps
-add_radio_tag = args.radio
-add_tvg_url = args.tvgurl
-add_gzip = args.gzip
-m3u_group_title = args.group
-
-# Init the AzuraCast API
-api = azuracast_api(instance_url, api_key)
-# Check if actually talking to a live AzuraCast server
-if not api.verify():
-    errprint(f"No live AzuraCast at: '{instance_url}'")
-    sys.exit(1)
-
-# Get stations from this AzuraCast instance
-stations = get_stations(
-    api,
-    channel_icon_url=channel_icon_url,
+def handle_instance(
+    instance_url=instance_url,
+    api_key=api_key,
     public_only=public_only,
-    videostream_keywords=videostream_keywords,
-)
+    output_folder=output_folder,
+    make_m3u=make_m3u,
+    make_rss=make_rss,
+    channel_icon_url=channel_icon_url,
+    custom_player_url=custom_player_url,
+    num_days=num_days,
+    fill_gaps=fill_gaps,
+    add_radio_tag=add_radio_tag,
+    add_tvg_url=add_tvg_url,
+    add_gzip=add_gzip,
+    m3u_group_title=m3u_group_title,
+):
+    """Handle one AzuraCast instance."""
 
-# Create M3U playlist files
-if make_m3u:
-    for station in stations:
-        create_m3u(
+    # Init the AzuraCast API
+    api = AzuraCastAPI(instance_url, api_key)
+    # Check if actually talking to a live AzuraCast server
+    if not api.verify():
+        errprint(f"No live AzuraCast at: '{instance_url}'")
+        sys.exit(1)
+
+    # Get stations from this AzuraCast instance
+    stations = get_stations(
+        api,
+        channel_icon_url=channel_icon_url,
+        public_only=public_only,
+        videostream_keywords=videostream_keywords,
+    )
+
+    # Create M3U playlist files
+    if make_m3u:
+        for station in stations:
+            create_m3u(
+                instance_url,
+                station,
+                m3u_group_title,
+                output_folder=output_folder,
+                add_tvg_url=add_tvg_url,
+                add_radio_tag=add_radio_tag,
+            )
+        create_m3u_all(
             instance_url,
-            station,
+            stations,
             m3u_group_title,
             output_folder=output_folder,
             add_tvg_url=add_tvg_url,
             add_radio_tag=add_radio_tag,
         )
-    create_m3u_all(
+
+    # Get schedules from all stations
+    programmes = []
+    for station in stations:
+        programmes.append(get_programme(api, station, num_days, fill_gaps))
+
+    # Create XMLTV file, add gzipped .gz version if requested
+    create_xmltv(
         instance_url,
         stations,
-        m3u_group_title,
+        programmes,
         output_folder=output_folder,
-        add_tvg_url=add_tvg_url,
-        add_radio_tag=add_radio_tag,
+        add_gzip=add_gzip,
     )
 
-# Get schedules from all stations
-programmes = []
-for station in stations:
-    programmes.append(get_programme(api, station, num_days, fill_gaps))
+    # Create RSS Feed files
+    if make_rss:
+        for station in stations:
+            create_rss_station(
+                instance_url, station, programmes, output_folder=output_folder
+            )
 
-# Create XMLTV file, add gzipped .gz version if requested
-create_xmltv(
-    instance_url, stations, programmes, output_folder=output_folder, add_gzip=add_gzip
-)
 
-# Create RSS Feed files
-if make_rss:
-    for station in stations:
-        create_rss_station(
-            instance_url, station, programmes, output_folder=output_folder
-        )
+def main():
+    """Main (runs if executed directly)."""
+
+    args = parser.parse_args()
+
+    instance_url = args.url
+    api_key = args.apikey
+    public_only = args.public
+    output_folder = args.output + "/"
+    make_m3u = args.m3u
+    make_rss = args.rss
+    channel_icon_url = args.icon
+    custom_player_url = args.customplayer
+    num_days = args.days
+    fill_gaps = args.fillgaps
+    add_radio_tag = args.radio
+    add_tvg_url = args.tvgurl
+    add_gzip = args.gzip
+    m3u_group_title = args.group
+
+    handle_instance(
+        instance_url=instance_url,
+        api_key=api_key,
+        public_only=public_only,
+        output_folder=output_folder,
+        make_m3u=make_m3u,
+        make_rss=make_rss,
+        channel_icon_url=channel_icon_url,
+        custom_player_url=custom_player_url,
+        num_days=num_days,
+        fill_gaps=fill_gaps,
+        add_radio_tag=add_radio_tag,
+        add_tvg_url=add_tvg_url,
+        add_gzip=add_gzip,
+        m3u_group_title=m3u_group_title,
+    )
+
+
+if __name__ == "__main__":
+    main()

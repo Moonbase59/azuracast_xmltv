@@ -607,6 +607,12 @@ Near the beginning of the file, you’ll find many user-customizable options, mo
 
 You can also set defaults for most options here. These will be shown when `--help` is invoked.
 
+### `azuracast_xmltv` as a Python module
+
+`azuracast_xmltv` can be used and imported as a Python module. Just rename (or symlink) it to have a `.py` file extension.
+
+All usual module functions should work, like `import`, help and documentation with tools like `pdoc`.
+
 ### `{moustache}`-type variables that can be used in customization
 
 Using this type of marking a _variable_ part of text is commonly used. While executing, `azuracast_xmltv` will replace these with the actual content, for example replace `{year}` with `2023` (if the programme starts in 2023). `azuracast_xmltv` will also automatically remove any leftover extra whitespace after replacing the variables.
@@ -666,6 +672,23 @@ But you haven’t used an _API key_, which is needed to use `{playlists}`, so we
 \*\* = URL to AzuraCast’s web player, or a custom player specified using the `-c`/`--customplayer` option. Use the latter to point listeners to a customized player on your station’s website instead of the default one.
 
 ## FAQ: Frequently Asked Questions
+
+### I get `HTTPError – 403 Client Error: Forbidden for url: …`
+
+In almost all cases, this means the API key given didn’t work. `azuracast_xmltv` will continue as if no API key has been given.
+
+The user who generated the API key in AzuraCast must have appropriate rights to access the station’s …
+- mounts,
+- playlists, and
+- streamers/DJs.
+
+Or maybe there was a typo or a character left out while copying the API key.
+
+### I get `HTTPError – 500 Server Error: Internal Server Error for url: https://…/api/station/STATION_ID/mounts`
+
+This means the station with ID `STATION_ID` has no mounts. Maybe they aren’t set up yet, or the station is HLS-only and doesn’t use Icecast or Shoutcast.
+
+`azuracast_xmltv` will continue normally.
 
 ### How do you handle different timezones?
 
