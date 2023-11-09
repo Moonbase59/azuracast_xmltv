@@ -673,6 +673,22 @@ But you haven’t used an _API key_, which is needed to use `{playlists}`, so we
 
 ## FAQ: Frequently Asked Questions
 
+### I get `Check URLs! – 'http://…/api/status' redirected to 'https://…/api/status' [301, 200]`
+
+This can happen in the initial server verification phase and is actually a _warning_. `azuracast_xmltv` will try to continue if it can find a live AzuraCast server.
+
+In the case shown, your request was redirected from a `http://` to a `https://` URL.
+Since HTTP status 301 means "moved permanently", you should re-invoke the command,
+this time using the `https://` URL. The URL you give on the commandline is used
+to construct the URLs in the various M3U, XML and RSS files, and you wouldn’t want
+to publicize "wrong" URLs. Even if they work, it looks unprofessional and generates
+unnecessary traffic.
+
+There _are_ situations where you want to _keep_ the un-redirected URLs, though.
+Let’s assume your server is in maintenenace and you have a _temporary_ redirect
+to a backup server for the time being (307 Temporary Redirect). In this case,
+you want to keep the "old" URLs and just let `azuracast_xmltv` continue.
+
 ### I get `HTTPError – 403 Client Error: Forbidden for url: …`
 
 In almost all cases, this means the API key given didn’t work. `azuracast_xmltv` will continue as if no API key has been given.
