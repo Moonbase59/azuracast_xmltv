@@ -159,9 +159,11 @@ and provides XMLTV Tuner M3U, EPG XML, and RSS feed listings.
 #   - Add redirection warning to initial server verification, explain in FAQ
 #     (user might generate files with bad/old URLs)
 #   - mainly for myself: experiments with automated documentation (Makefile, /docs)
+# 2023-11-09 - Moonbase - v0.17.2
+#   - fix wrong tvg-ids – main() must be able to modify module globals
 
 # version info
-__version_info__ = ("0", "17", "1")
+__version_info__ = ("0", "17", "2")
 __version__ = ".".join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -1672,6 +1674,21 @@ def handle_instance(
 
 def main():
     """Main (runs if executed directly)."""
+
+    global instance_url
+    global api_key
+    global public_only
+    global output_folder
+    global make_m3u
+    global make_rss
+    global channel_icon_url
+    global custom_player_url
+    global num_days
+    global fill_gaps
+    global add_radio_tag
+    global add_tvg_url
+    global add_gzip
+    global m3u_group_title
 
     args = parser.parse_args()
 
