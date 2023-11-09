@@ -691,7 +691,7 @@ you want to keep the "old" URLs and just let `azuracast_xmltv` continue.
 
 ### I get `HTTPError – 403 Client Error: Forbidden for url: …`
 
-In almost all cases, this means the API key given didn’t work. `azuracast_xmltv` will continue as if no API key has been given.
+In almost all cases, this means the API key given didn’t work. `azuracast_xmltv` will continue as if no API key had been given.
 
 The user who generated the API key in AzuraCast must have appropriate rights to access the station’s …
 - mounts,
