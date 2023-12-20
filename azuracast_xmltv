@@ -161,9 +161,12 @@ and provides XMLTV Tuner M3U, EPG XML, and RSS feed listings.
 #   - mainly for myself: experiments with automated documentation (Makefile, /docs)
 # 2023-11-09 - Moonbase - v0.17.2
 #   - fix wrong tvg-ids – main() must be able to modify module globals
+# 2023-12-20 - Moonbase - v0.18.0
+#   - use new "hls_is_default", available since AzuraCast Rolling Release
+#     #c8bcee0 (2023-12-20 1:55)
 
 # version info
-__version_info__ = ("0", "17", "2")
+__version_info__ = ("0", "18", "0")
 __version__ = ".".join(__version_info__)
 
 APPNAME = "azuracast_xmltv"
@@ -707,6 +710,15 @@ def get_stations(api, channel_icon_url="", public_only=True, videostream_keyword
                 }
                 s["mounts"].append(m)
 
+        # sort mounts by display name, put default mount(s) at beginning
+        # this is intended for players that immediately start playout,
+        # and for better human readability
+        s["mounts"] = sorted(
+            s["mounts"], key=lambda k: (not k["is_default"], k["name"])
+        )
+
+        # IF we have a HLS default stream, it should come first in the list
+        # HLS "trumps" Icecast or Shoutcast default streams
         if station["hls_enabled"]:
             # HLS has no "is_default" (yet), we simply set it to False
             m = {
@@ -716,15 +728,17 @@ def get_stations(api, channel_icon_url="", public_only=True, videostream_keyword
                 "is_video": False,
             }
             # future: if API returns "hls_is_default" (False if not)
+            # available since Rolling Release #c8bcee0 (2023-12-20 1:55)
             m["is_default"] = station.get("hls_is_default", False)
-            s["mounts"].append(m)
-
-        # sort mounts by display name, put default mount(s) at beginning
-        # this is intended for players that immediately start playout,
-        # and for better human readability
-        s["mounts"] = sorted(
-            s["mounts"], key=lambda k: (not k["is_default"], k["name"])
-        )
+            if m["is_default"]:
+                # HLS trumps other defaults, insert at beginning
+                s["mounts"].insert(0, m)
+            else:
+                # append and sort again, put in normal sequence
+                s["mounts"].append(m)
+                s["mounts"] = sorted(
+                    s["mounts"], key=lambda k: (not k["is_default"], k["name"])
+                )
 
         if public_only:
             if station["is_public"]:

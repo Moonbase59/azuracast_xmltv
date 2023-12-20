@@ -300,7 +300,11 @@ https://demo.azuracast.com/hls/azuratest_radio/live.m3u8
 
 Beginning with `azuracast_xmltv` version 0.7.0, the M3U file entries (mount points) will be _sorted_ by their display name, and the _default mount_ put at the top.
 
-This is mainly intended for players that immediately start playing when opening an M3U file (they should play the default mount first), but also helpful for humans. We just like sorted lists. ;-)
+Beginning with `azuracast_xmltv` version 0.18.0 and AzuraCast Rolling Release
+\#c8bcee0 (2023-12-20 1:55), HLS streams set as default will "trump" Icecast/Shoutcast
+default streams and be put at the top.
+
+This is mainly intended for players that immediately start playing when opening an M3U file (they should play the default mount first), but also helpful for humans. We just like sorted lists. ;-) Putting HLS first provides easier use for "road warriors", on smartphones and car stereos, due to automatic bandwidth adjustment in areas with varying reception conditions.
 
 More modern playout/media center software like KODI can automatically find the EPG file that corresponds to a M3U, thus reducing manual intervention and setup.
 
