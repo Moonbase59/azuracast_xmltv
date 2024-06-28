@@ -2,6 +2,8 @@
 
 ## Create rich XMLTV Tuner, EPG and RSS feeds from an [AzuraCast](https://www.azuracast.com/) Web Radio.
 
+**If you like what you got, please consider to [![Donate with Paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate/?hosted_button_id=PBPR63362LDEU). Thank you! ❤️**
+
 > _Don’t miss the [Discussions](https://github.com/Moonbase59/azuracast_xmltv/discussions)! New versions are announced there, and useful hints._
 
 > _**Did you know? You can follow my [commits](https://github.com/Moonbase59/azuracast_xmltv/commits.atom), the [discussions](https://github.com/Moonbase59/azuracast_xmltv/discussions.atom) or just the [announcements](https://github.com/Moonbase59/azuracast_xmltv/discussions/categories/announcements.atom) using your RSS/Atom feed reader!** Just copy-paste the links into your reader as a new subscription and you’ll never miss anything again._
@@ -12,7 +14,7 @@ The big picture behind this is to create **standards-compliant files** to
   - an easy access to your stations and streams
   - an electronic program guide (EPG) so they can actively tune in to your shows
   - RSS Feeds with show info and direct links to the web player & streams
- 
+
 Therefore I recommend regenerating the files periodically and **linking to them on your website**, so your listeners can point their media centers/players directly at these links and stay up-to-date with your station(s) automatically.
 
 Unfortunately, there isn’t a "standard" location for this yet. Maybe we should all start using `https://domain.tld/xmltv` for that, and
@@ -113,11 +115,11 @@ Probably after trying out the above on a local machine, you might want to instal
     ```
 
 5. Modify the `docker-compose.override.yml` file and add an entry for the `xmltv` folder in the `volumes` section:
-   
+
    ```bash
    nano docker-compose.override.yml
    ```
-   
+
    ```yaml
    services:
      web:
@@ -145,18 +147,18 @@ Probably after trying out the above on a local machine, you might want to instal
    Save the file.
 
    I left the `-m` option in here (will create M3U files), since my mounts might change, but you can also leave it out and create the M3U manually once. I also set the `-f` option to create _filler_ program entries. Use any options you want here.
-   
+
    _Note:_ I also use the new `-t`/`--tvgurl` option here, since your files can now be found under your server’s `/xmltv/` path. This allows more modern software (like KODI) to automatically find the EPG data file (XML) belonging to the M3U.
 
 8. Now change into the `xmltv` folder and run `azuracast_xmltv` once to check there are no errors, and get the initial set of files. You don’t want to wait for the next automatic update—it might be almost 12 hours away… Use _the exact same command you put into the crontab_ for this, just to be sure everything works.
-   
+
    ```bash
    /usr/local/bin/azuracast_xmltv -o /var/azuracast/xmltv -u https://yourdomain.com -a 'your_api_key_here' -f -m -t -g
    ```
    Don’t forget to include the `-m` option, so it’ll create M3U files.
 
 9. You should now be able to access the XMLTV data on your public AzuraCast website:
-   
+
    ```
    https://yourdomain.com/xmltv/yourstation.m3u
    https://yourdomain.com/xmltv/yourdomain.com.xml
@@ -164,7 +166,7 @@ Probably after trying out the above on a local machine, you might want to instal
    ```
 
    Instead of `yourstation`, use the _station shortcode_ you have used when setting up your station. This is the "URL Stub" you might have changed under _Edit Station Profile → Profile_. You can see this field only in Advanced Mode:
-   
+
    ![Auswahl_284](https://github.com/Moonbase59/azuracast_xmltv/assets/3706922/08b51d0b-0a3b-4e88-a340-4abe3afc6193)
 
    _Hint:_ Even if underscores `_` are shown in the example, **only use alphanumeric** characters and digits, and the hyphen `-` to comply with [RFC2838](https://www.rfc-editor.org/rfc/rfc2838.html). Underscores are not allowed in a domain name.
@@ -173,7 +175,7 @@ Probably after trying out the above on a local machine, you might want to instal
 11. **Congratulations!** You can now **publish the above links on your website so your listeners will know where to point their media players and where to get the EPG!**
 
     Try it out using any media center or player I mentioned, or just do a quick test with an audio player like _Audacious_ or _VLC_.
-    
+
     If your client supports the compressed gzip-format (.gz) for the EPG, you should use it. It reduces transmission time and bandwidth.
 
     And don’t forget to **log out** from your AzuraCast `ssh` session.
@@ -374,7 +376,7 @@ You CAN be excited. Or just have fun!
   </programme>
 
   ...
-  
+
   <programme start="20231021180000 +0200" stop="20231022000000 +0200" channel="niteradio.example.com">
     <title lang="en">Heart Dance from London, UK</title>
     <desc lang="en">Playlist: Heart Dance from London, UK
@@ -562,7 +564,7 @@ Generated from example.com by azuracast_xmltv 0.5.0.
 Or even with long descriptions:
 
 ```
-tv_to_text --with-desc radio.niteradio.net.xml 
+tv_to_text --with-desc radio.niteradio.net.xml
 10-18 (Wednesday)
 
 06:00--12:00	Pop (requests enabled) // Your favorite station, YOUR music!	Nite Radio	Playlist: Pop  The request lines are open! Make this program YOURS by adding a request.  Go to https://example.com/public/niteradio, click on ›Request Song‹ and select your favorite.
